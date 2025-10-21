@@ -8,6 +8,12 @@ app = FastAPI(title="Mem0 Local Memory System")
 import ollama
 import numpy as np
 
+from datetime import datetime
+from agents import Agent  # assumes same folder; adjust if different
+import logging
+logger = logging.getLogger("ai_learner_agent")
+
+
 class LocalOllamaEmbedder:
     """Direct local embedding via Ollama."""
     def __init__(self, model="nomic-embed-text:latest", base_url="http://localhost:11434"):
@@ -15,11 +21,19 @@ class LocalOllamaEmbedder:
         self.base_url = base_url
 
     def embed(self, text: str):
+        # ⚙️ Prevent empty or whitespace-only queries
+        if not text or not text.strip():
+            print("⚠️ Empty text passed to embed() — returning zero vector.")
+            return np.zeros(768, dtype=np.float32)
+
         r = ollama.embeddings(model=self.model, prompt=text)
         v = r.get("embedding", [])
         if not v or len(v) == 0:
-            raise ValueError("❌ Ollama embedding failed — got empty vector")
+            print("❌ Ollama embedding failed — returning zero vector.")
+            return np.zeros(768, dtype=np.float32)
+
         return np.array(v, dtype=np.float32)
+
 
 
 # ✅ Allow the React UI to call the API from port 3000
@@ -105,6 +119,56 @@ class LocalMemory:
 qdrant = QdrantClient(url="http://localhost:6333")
 local_embedder = LocalOllamaEmbedder()
 m = LocalMemory(qdrant, local_embedder)
+
+# ============================================================
+# AGENT CONFIG
+# ============================================================
+agent = Agent(
+    name="AI Learner",
+    instructions=(
+        """You are a student being taught step by step by a teacher.
+Each chat session focuses on exactly one topic provided by the system.
+You are a student being taught step by step.
+then ground the topic and learn only about that topic in a given session, you can change topic if the user wants to only;
+Never ask again for the topic once it is set.
+Do not repeat greetings or introductions after the first message.
+Never start messages with “Hi, I am your AI student” unless explicitly told to greet.
+Reflect only what the teacher says about this topic.
+If nothing has been taught yet, say 'You haven’t taught me anything yet.'
+
+At the beginning of the conversation, if the user has not yet provided a topic, greet with:
+###
+"Hello! What topic would you like to teach me today?"
+###
+Throughout the conversation, if the user provides a topic name (short phrase like 'Computational Thinking') when no topic is yet set, confirm it with 'Understood! The topic is [topic]. You haven’t taught me anything yet. What would you like to teach me first?' and set it for the session.
+
+When the teacher explains something new, repeat it back in 1–2 sentences maximum,
+then ask one short clarifying question. Clarifying questions must sound curious,
+e.g., 'So what is X?', 'Can you give me an example?', or 'Does that mean Y?'.
+Always treat the latest user message as potential new teaching content to reflect and clarify if relevant to the topic.
+when asked what you have learned till date, always summarize everything fully from the chat history, including timestamps if available.
+Never invent knowledge, never explain beyond what was taught.
+You are only reflecting the teacher's words.
+If nothing has been taught yet, say 'You haven’t taught me anything yet.'
+
+Your role:
+- If no topic is set, politely ask what topic to learn.
+- Once the topic is set, never re-ask for it.
+- Listen carefully to what the teacher says about that topic.
+- Reflect only what was taught in this session.
+- Avoid summarizing prior greetings or instructions.
+- Do not say what you have learned unless directly asked.
+- When asked to summarize, do so concisely (1–2 sentences).
+- Never invent or add external knowledge.
+- Stay only on this topic.
+- If the user asks about something unrelated to the current topic, first check if it's mentioned in the full chat history; if yes, answer based on that context briefly, then suggest: 'That sounds interesting! Would you like to switch our learning topic to [unrelated thing], or continue with [current topic]?'
+- For casual greetings like 'hi', respond naturally referencing recent history or asking how to proceed, e.g., 'Hi! We've been chatting about [topic]—want to continue or switch things up?'
+- When asked about chat history or context (e.g., 'what do you see about X?'), reference specific past messages with timestamps if provided, then offer to continue or change topic.
+- Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content."""
+    ),
+    model="openai/gpt-oss-20b:free",  # ✅ local proxy model (OpenRouter)
+)
+logger.info("Configured agent %s using model %s", agent.name, getattr(agent, "model", "unknown"))
 
 
 # -----------------------------------------------------------
@@ -278,30 +342,37 @@ def chat(
     session = get_session_id(session_id)
     print(f"\n💬 [DEBUG] Chat request: {prompt}")
 
-    # Retrieve relevant context
+    # ---- Context & history ----
     context = m.search(query=prompt, user_id=user_id, agent_id=topic, run_id=session)
     context_text = "\n".join([item.get("memory", "") for item in context.get("results", [])])
 
-    full_prompt = f"Context:\n{context_text}\n\nUser: {prompt}\nAssistant:"
+    # ---- Formulate full LLM prompt ----
+    full_prompt = (
+        f"[Session: {session}] [Topic: {topic}] [Time: {datetime.now()}]\n"
+        f"Context:\n{context_text}\n\nTeacher: {prompt}\nStudent:"
+    )
     print(f"🧩 [DEBUG] Full prompt sent to Ollama:\n{full_prompt[:400]}...")
 
-    # ✅ Local Ollama chat
-    response = ollama.chat(
-        model="llama3",
-        messages=[{"role": "user", "content": full_prompt}],
-    )
-
+    # ---- Generate with Ollama ----
+    response = ollama.chat(model="llama3", messages=[{"role": "user", "content": full_prompt}])
     output = response["message"]["content"]
     print(f"🗣️ [DEBUG] Ollama LLM output:\n{output}")
 
-    # Store interaction as text so the embedder receives a flat string
-    conversation_summary = f"User: {prompt}\nAssistant: {output}"
+    # ---- Store in memory ----
     m.add(
-        conversation_summary,
+        f"Teacher: {prompt}\nStudent: {output}",
         user_id=user_id,
         agent_id=topic,
         run_id=session,
         metadata={"type": "short_term"},
     )
 
-    return {"session_id": session, "response": output}
+    # ---- Promote short-term to long-term ----
+    all_mems = m.search(query="", user_id=user_id, agent_id=topic, run_id=session)
+    if len(all_mems.get("results", [])) > 10:
+        print("🧠 [PROMOTION] Moving older memories to long_term store")
+        for i, mem in enumerate(all_mems["results"][:-3]):  # keep latest 3
+            m.add(mem["memory"], user_id=user_id, agent_id=topic, run_id=session, metadata={"type": "long_term"})
+
+    return {"session_id": session, "topic": topic, "response": output}
+
