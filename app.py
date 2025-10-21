@@ -1,9 +1,23 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request, HTTPException
 from mem0 import Memory
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Mem0 Local Memory System")
+# Must come immediately after FastAPI initialization
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 import ollama
 import numpy as np
@@ -33,20 +47,6 @@ class LocalOllamaEmbedder:
             return np.zeros(768, dtype=np.float32)
 
         return np.array(v, dtype=np.float32)
-
-
-
-# ✅ Allow the React UI to call the API from port 3000
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ✅ Fully local Mem0 setup (no OpenAI dependency)
 from qdrant_client import QdrantClient
@@ -110,15 +110,26 @@ class LocalMemory:
             collection_name=self.collection_name,
             query=qvec.tolist(),
             with_payload=True,
-            limit=5,
+            limit=50,
         ).points
         return {"results": [{"id": p.id, "score": p.score, "memory": p.payload.get("text", "")} for p in res]}
+
 
 
 # ✅ Qdrant and local embedder setup
 qdrant = QdrantClient(url="http://localhost:6333")
 local_embedder = LocalOllamaEmbedder()
 m = LocalMemory(qdrant, local_embedder)
+
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env
+load_dotenv("/Users/sreekanthgopi/Desktop/Apps/AIStudentMem0/.env")
+
+if not os.getenv("OPENAI_API_KEY"):
+    raise EnvironmentError("❌ OPENAI_API_KEY not found in environment!")
+
 
 # ============================================================
 # AGENT CONFIG
@@ -166,10 +177,13 @@ Your role:
 - When asked about chat history or context (e.g., 'what do you see about X?'), reference specific past messages with timestamps if provided, then offer to continue or change topic.
 - Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content."""
     ),
-    model="openai/gpt-oss-20b:free",  # ✅ local proxy model (OpenRouter)
+    model="gpt-5-nano",
 )
 logger.info("Configured agent %s using model %s", agent.name, getattr(agent, "model", "unknown"))
 
+# model="openai/gpt-oss-20b:free",  # ✅ local proxy model (OpenRouter)
+    # model="gpt-4.1",
+    # model="ollama/llama3:latest",  # local Ollama model
 
 # -----------------------------------------------------------
 # CONFIGURATION: Local Qdrant + Ollama
@@ -201,6 +215,35 @@ config = {
         },
     },
 }
+
+import sqlite3
+from datetime import datetime
+
+def log_message(session_id, topic, user_role, message):
+    con = sqlite3.connect("chat_history_memori.db")
+    cur = con.cursor()
+    cur.execute("INSERT INTO chat_history (session_id, topic, user_role, message) VALUES (?,?,?,?)",
+                (session_id, topic, user_role, message))
+    con.commit()
+    con.close()
+
+def start_session(topic="general"):
+    sid = str(uuid.uuid4())
+    con = sqlite3.connect("chat_history_memori.db")
+    cur = con.cursor()
+    cur.execute("INSERT INTO session_meta (session_id, topic, started_at) VALUES (?,?,?)",
+                (sid, topic, datetime.now()))
+    con.commit()
+    con.close()
+    return sid
+
+def end_session(session_id, summary=""):
+    con = sqlite3.connect("chat_history_memori.db")
+    cur = con.cursor()
+    cur.execute("UPDATE session_meta SET ended_at=?, summary=? WHERE session_id=?",
+                (datetime.now(), summary, session_id))
+    con.commit()
+    con.close()
 
 
 # -----------------------------------------------------------
@@ -331,48 +374,158 @@ def reset_all():
     return {"message": "All memories reset"}
 
 import ollama
+import traceback
+
+DB_PATH = "/Users/sreekanthgopi/Desktop/Apps/AIStudentMem0/chat_history_memori.db"
+
+from agents import Runner
+import traceback
+import uuid
+import sqlite3
+from datetime import datetime
 
 @app.post("/chat")
-def chat(
-    prompt: str = Query(...),
-    user_id: str = "sree",
-    topic: str = "general",
-    session_id: str | None = None,
-):
-    session = get_session_id(session_id)
-    print(f"\n💬 [DEBUG] Chat request: {prompt}")
+async def chat(request: Request, prompt: str, session_id: str | None = None):
+    """
+    Handles chat messages asynchronously:
+      • Uses Runner.run() (async-safe)
+      • Maintains DB + memory consistency
+      • Returns structured response
+    """
+    try:
+        # --- 0️⃣ Ensure session_id ---
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            print(f"🆕 Generated new session_id: {session_id}")
 
-    # ---- Context & history ----
-    context = m.search(query=prompt, user_id=user_id, agent_id=topic, run_id=session)
-    context_text = "\n".join([item.get("memory", "") for item in context.get("results", [])])
+        # --- 1️⃣ Connect to SQLite ---
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        cur = conn.cursor()
+        print(f"✅ Opened DB connection for session {session_id}")
 
-    # ---- Formulate full LLM prompt ----
-    full_prompt = (
-        f"[Session: {session}] [Topic: {topic}] [Time: {datetime.now()}]\n"
-        f"Context:\n{context_text}\n\nTeacher: {prompt}\nStudent:"
-    )
-    print(f"🧩 [DEBUG] Full prompt sent to Ollama:\n{full_prompt[:400]}...")
+        # --- 2️⃣ Ensure table exists ---
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            user_input TEXT,
+            ai_output TEXT,
+            timestamp TEXT
+        );
+        """)
+        conn.commit()
 
-    # ---- Generate with Ollama ----
-    response = ollama.chat(model="llama3", messages=[{"role": "user", "content": full_prompt}])
-    output = response["message"]["content"]
-    print(f"🗣️ [DEBUG] Ollama LLM output:\n{output}")
+        # --- 3️⃣ Fetch previous context ---
+        # --- 3️⃣ Fetch chat history for this session ---
+        cur.execute(
+            "SELECT user_input, ai_output FROM chat_history WHERE session_id=? ORDER BY id ASC;",
+            (session_id,),
+        )
+        rows = cur.fetchall()
+        chat_context = "\n".join(
+            [f"Teacher: {r[0]}\nStudent: {r[1]}" for r in rows if r[0] or r[1]]
+        )
+        print(f"🧠 Loaded {len(rows)} previous messages for context.")
 
-    # ---- Store in memory ----
-    m.add(
-        f"Teacher: {prompt}\nStudent: {output}",
-        user_id=user_id,
-        agent_id=topic,
-        run_id=session,
-        metadata={"type": "short_term"},
-    )
+        # --- 3️⃣.5 Fetch related memories from Qdrant ---
+        try:
+            search_results = m.search(query=prompt, user_id="sree", agent_id="general", run_id=session_id)
+            similar_memories = [
+                r["memory"] for r in search_results.get("results", []) if r.get("score", 0) > 0.2
+            ]
+            memory_context = "\n".join(similar_memories)
+            if memory_context:
+                print(f"📚 Retrieved {len(similar_memories)} related memories from vector store.")
+                chat_context += f"\n\n[Relevant Past Knowledge]\n{memory_context}"
+        except Exception as search_err:
+            print("⚠️ Memory search failed:", search_err)
 
-    # ---- Promote short-term to long-term ----
-    all_mems = m.search(query="", user_id=user_id, agent_id=topic, run_id=session)
-    if len(all_mems.get("results", [])) > 10:
-        print("🧠 [PROMOTION] Moving older memories to long_term store")
-        for i, mem in enumerate(all_mems["results"][:-3]):  # keep latest 3
-            m.add(mem["memory"], user_id=user_id, agent_id=topic, run_id=session, metadata={"type": "long_term"})
 
-    return {"session_id": session, "topic": topic, "response": output}
 
+        # --- 4️⃣ Run Agent asynchronously ---
+        try:
+            print("🤖 Calling OpenAI Agent (async)...")
+            user_prompt = (
+                f"[Session: {session_id}] [Time: {datetime.now().isoformat()}]\n"
+                f"Context:\n{chat_context}\n\nTeacher: {prompt}\nStudent:"
+            )
+
+            result = await Runner.run(agent, user_prompt)
+            reply = getattr(result, "final_output", "").strip()
+            if not reply:
+                reply = "⚠️ Agent returned no output."
+        except Exception as agent_err:
+            print("❌ Agent execution failed:", agent_err)
+            traceback.print_exc()
+            return {"detail": f"Agent execution failed: {agent_err}"}
+
+        # --- 5️⃣ Store in local memory ---
+        conversation_summary = f"Teacher: {prompt}\nStudent: {reply}"
+        m.add(
+            conversation_summary,
+            user_id="sree",
+            agent_id="general",
+            run_id=session_id,
+            metadata={"type": "short_term"},
+        )
+
+        # --- 6️⃣ Insert into DB ---
+        cur.execute(
+            "INSERT INTO chat_history (session_id, user_input, ai_output, timestamp) VALUES (?, ?, ?, ?);",
+            (session_id, prompt, reply, datetime.now().isoformat()),
+        )
+        conn.commit()
+        print("💾 Chat record inserted successfully.")
+
+        # --- 7️⃣ Return JSON response ---
+        return {
+            "response": reply,
+            "context_count": len(rows),
+            "session_id": session_id,
+        }
+
+    except Exception as e:
+        print("❌ Chat endpoint error:", e)
+        traceback.print_exc()
+        return {"error": str(e)}
+
+    finally:
+        try:
+            conn.close()
+            print("🔒 SQLite connection closed.")
+        except Exception as e:
+            print("⚠️ Error closing DB:", e)
+
+
+@app.post("/topic")
+def set_topic(new_topic: str = Query(...), user_id: str = "sree"):
+    m.add(f"Topic switched to {new_topic}", user_id=user_id,
+          agent_id=new_topic, metadata={"type": "system"})
+    return {"message": f"✅ Topic set to '{new_topic}'. You haven’t taught me anything yet."}
+
+
+@app.post("/session")
+def new_session(topic: str = "general"):
+    sid = start_session(topic)
+    return {"session_id": sid, "message": f"🆕 New session started for topic '{topic}'."}
+
+
+
+@app.get("/search_history")
+def search_all(query: str = Query(...), user_id: str = "sree"):
+    res = m.search(query=query, user_id=user_id)
+    return {"query": query, "results": res}
+
+@app.get("/inspect_memory")
+def inspect_memory(user_id: str = "sree"):
+    short = m.search(query="", user_id=user_id, filters={"type": "short_term"})
+    long = m.search(query="", user_id=user_id, filters={"type": "long_term"})
+    print("\n🧩 Short-term records:")
+    for i, s in enumerate(short.get("results", [])):
+        print(f"{i+1}. {s.get('memory')[:100]}")
+
+    print("\n📘 Long-term records:")
+    for i, l in enumerate(long.get("results", [])):
+        print(f"{i+1}. {l.get('memory')[:100]}")
+
+    return {"short_term": short, "long_term": long}
