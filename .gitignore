@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+__pycache__/
+*.pyc
+*.db
+
+# Local vector store
+qdrant_storage/
+
+# Frontend cache
+frontend/node_modules/
+frontend/.next/
+
+# macOS system files
+.DS_Store
+
+# Secrets
+.env
