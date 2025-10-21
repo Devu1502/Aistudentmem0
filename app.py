@@ -511,6 +511,68 @@ def new_session(topic: str = "general"):
 
 
 
+# --- Session tooling endpoints ---
+
+@app.get("/summary")
+def summarize_session(session_id: str = Query(..., description="Session to summarize")):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_input, ai_output FROM chat_history WHERE session_id=? ORDER BY id ASC;",
+            (session_id,),
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return {"session_id": session_id, "summary": "No conversation found for this session."}
+
+    joined_transcript = "\n".join(
+        f"Teacher: {user}\nStudent: {ai}" for user, ai in rows if user or ai
+    )
+    prompt = (
+        "Provide a concise summary (max 4 sentences) of the following teacher/student exchange. "
+        "Focus on what the teacher taught and how the student responded.\n\n"
+        f"{joined_transcript}"
+    )
+    summary_response = ollama.chat(
+        model="llama3",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    summary_text = summary_response["message"]["content"].strip()
+
+    m.add(
+        summary_text,
+        user_id="sree",
+        agent_id="general",
+        run_id=session_id,
+        metadata={"type": "session_summary"},
+    )
+
+    return {"session_id": session_id, "summary": summary_text}
+
+
+@app.get("/search_topic")
+def search_topic(query: str = Query(..., description="Keyword to search"), limit: int = 5):
+    try:
+        results = m.search(query=query, user_id="sree")
+    except Exception as search_err:
+        raise HTTPException(status_code=500, detail=f"Vector search failed: {search_err}") from search_err
+
+    hits = results.get("results", [])[:limit]
+    formatted = [
+        {
+            "id": item.get("id"),
+            "score": item.get("score"),
+            "memory": item.get("memory"),
+        }
+        for item in hits
+    ]
+    return {"query": query, "results": formatted}
+
+
 @app.get("/search_history")
 def search_all(query: str = Query(...), user_id: str = "sree"):
     res = m.search(query=query, user_id=user_id)
