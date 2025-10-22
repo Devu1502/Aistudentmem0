@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Query, Request, HTTPException
-from mem0 import Memory
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
+from intent_utils import detect_dev_command, handle_system_action, sanitize_reply
+from memory import LocalMemory, LocalOllamaEmbedder
 
 app = FastAPI(title="Mem0 Local Memory System")
 # Must come immediately after FastAPI initialization
@@ -20,7 +21,6 @@ app.add_middleware(
 
 
 import ollama
-import numpy as np
 
 from datetime import datetime
 from agents import Agent  # assumes same folder; adjust if different
@@ -28,92 +28,8 @@ import logging
 logger = logging.getLogger("ai_learner_agent")
 
 
-class LocalOllamaEmbedder:
-    """Direct local embedding via Ollama."""
-    def __init__(self, model="nomic-embed-text:latest", base_url="http://localhost:11434"):
-        self.model = model
-        self.base_url = base_url
-
-    def embed(self, text: str):
-        # ⚙️ Prevent empty or whitespace-only queries
-        if not text or not text.strip():
-            print("⚠️ Empty text passed to embed() — returning zero vector.")
-            return np.zeros(768, dtype=np.float32)
-
-        r = ollama.embeddings(model=self.model, prompt=text)
-        v = r.get("embedding", [])
-        if not v or len(v) == 0:
-            print("❌ Ollama embedding failed — returning zero vector.")
-            return np.zeros(768, dtype=np.float32)
-
-        return np.array(v, dtype=np.float32)
-
 # ✅ Fully local Mem0 setup (no OpenAI dependency)
 from qdrant_client import QdrantClient
-from mem0.memory.main import Memory
-
-
-# ✅ Manual lightweight subclass that avoids OpenAI factory
-from qdrant_client.models import PointStruct
-import uuid
-
-class LocalMemory:
-    """Minimal offline memory manager using Qdrant + Ollama embeddings."""
-
-    def __init__(self, qdrant_client, embedder):
-        self.vector_store = qdrant_client
-        self.embedding_model = embedder
-        self.collection_name = "mem0_local"
-        self.dimension = 768
-        self._ensure_collection()
-        print("🧠 LocalMemory initialized — fully offline mode")
-
-    def _ensure_collection(self):
-        """Create collection if missing or mismatched."""
-        from qdrant_client.models import Distance, VectorParams
-        try:
-            info = self.vector_store.get_collection(self.collection_name)
-            dims = info.config.params.vectors.size
-            if dims != self.dimension:
-                print(f"⚠️ Dimension mismatch ({dims} vs {self.dimension}); recreating.")
-                self.vector_store.delete_collection(self.collection_name)
-                self.vector_store.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config=VectorParams(size=self.dimension, distance=Distance.COSINE),
-                )
-        except Exception:
-            self.vector_store.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=self.dimension, distance=Distance.COSINE),
-            )
-
-    def add(self, text: str, user_id="sree", agent_id="general", run_id=None, metadata=None):
-        """Add one memory record with embedding."""
-        vec = self.embedding_model.embed(text)
-        pid = str(uuid.uuid4())
-        payload = {"text": text, "user_id": user_id, "agent_id": agent_id, "run_id": run_id or "default"}
-        if metadata:
-            payload.update(metadata)
-
-        self.vector_store.upsert(
-            collection_name=self.collection_name,
-            points=[PointStruct(id=pid, vector=vec.tolist(), payload=payload)],
-            wait=True,
-        )
-        print(f"🧠 Added memory {pid[:8]} | {text[:40]}")
-        return {"id": pid, "text": text}
-
-    def search(self, query, user_id=None, agent_id=None, run_id=None, filters=None):
-        """Search for similar memories."""
-        qvec = self.embedding_model.embed(query)
-        res = self.vector_store.query_points(
-            collection_name=self.collection_name,
-            query=qvec.tolist(),
-            with_payload=True,
-            limit=50,
-        ).points
-        return {"results": [{"id": p.id, "score": p.score, "memory": p.payload.get("text", "")} for p in res]}
-
 
 
 # ✅ Qdrant and local embedder setup
@@ -160,7 +76,19 @@ Always treat the latest user message as potential new teaching content to reflec
 when asked what you have learned till date, always summarize everything fully from the chat history, including timestamps if available.
 Never invent knowledge, never explain beyond what was taught.
 You are only reflecting the teacher's words.
-If nothing has been taught yet, say 'You haven’t taught me anything yet.'
+If nothing has been taught yet, say 'You haven’t taught me anything yet.' and also:
+
+Special instructions for topic/session management:
+- Always remember the current topic for the session once set.
+- If the teacher clearly says to change topic, output:
+If the teacher clearly says to change topic or start new session, output a hidden signal in this format:
+<system_action>topic=NEW_TOPIC</system_action> or <system_action>session=new</system_action>
+If the teacher asks to clear memory or reset, use <system_action>reset</system_action>.
+ eg: "Let's switch topics to Quantum Computing." or "Start a new session on Machine Learning."
+ response: <system_action>topic=Quantum Computing</system_action> or <system_action>session=new</system_action>
+- If the teacher asks to clear memory or reset, use <system_action>reset</system_action>.
+- Never output these system actions unless explicitly triggered by the teacher's request.
+- if both are asked like new session new topic - do both actions together. eg: user: "Start a new session on Astrophysics and new session."; response: <system_action>session=new;topic=Astrophysics</system_action>
 
 Your role:
 - If no topic is set, politely ask what topic to learn.
@@ -175,7 +103,9 @@ Your role:
 - If the user asks about something unrelated to the current topic, first check if it's mentioned in the full chat history; if yes, answer based on that context briefly, then suggest: 'That sounds interesting! Would you like to switch our learning topic to [unrelated thing], or continue with [current topic]?'
 - For casual greetings like 'hi', respond naturally referencing recent history or asking how to proceed, e.g., 'Hi! We've been chatting about [topic]—want to continue or switch things up?'
 - When asked about chat history or context (e.g., 'what do you see about X?'), reference specific past messages with timestamps if provided, then offer to continue or change topic.
-- Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content."""
+- Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content.
+
+"""
     ),
     model="gpt-5-nano",
 )
@@ -213,7 +143,7 @@ config = {
             "model": "nomic-embed-text:latest",
             "ollama_base_url": "http://localhost:11434",
         },
-    },
+    }, 
 }
 
 import sqlite3
@@ -392,11 +322,28 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
       • Maintains DB + memory consistency
       • Returns structured response
     """
+    conn: sqlite3.Connection | None = None
     try:
         # --- 0️⃣ Ensure session_id ---
         if not session_id:
             session_id = str(uuid.uuid4())
             print(f"🆕 Generated new session_id: {session_id}")
+
+        # --- 0️⃣.5 Developer slash commands ---
+        dev_cmd = detect_dev_command(prompt)
+        if dev_cmd:
+            if dev_cmd["cmd"] == "search_topic":
+                query = dev_cmd["arg"]
+                print(f"🛠️ Dev command detected: /search_topic '{query}'")
+                results = m.search(query=query, user_id="sree")
+                return {
+                    "response": f"🔍 Found {len(results.get('results', []))} results for '{query}'",
+                    "session_id": session_id,
+                }
+            if dev_cmd["cmd"] == "reset":
+                print("🛠️ Dev command detected: /reset")
+                m.reset()
+                return {"response": "🧹 Memory store reset successfully.", "session_id": session_id}
 
         # --- 1️⃣ Connect to SQLite ---
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -429,18 +376,39 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
 
         # --- 3️⃣.5 Fetch related memories from Qdrant ---
         try:
-            search_results = m.search(query=prompt, user_id="sree", agent_id="general", run_id=session_id)
-            similar_memories = [
-                r["memory"] for r in search_results.get("results", []) if r.get("score", 0) > 0.2
-            ]
+            def extract_hits(result):
+                return result.get("results", []) if isinstance(result, dict) else (result or [])
+
+            session_hits = extract_hits(
+                m.search(query=prompt, user_id="sree", agent_id="general", run_id=session_id)
+            )
+            combined_hits = session_hits[:]
+
+            if len(combined_hits) < 100:
+                global_hits = extract_hits(m.search(query=prompt, user_id="sree", agent_id="general"))
+                seen_ids = {item.get("id") for item in combined_hits}
+                for item in global_hits:
+                    if item.get("id") not in seen_ids:
+                        combined_hits.append(item)
+                        seen_ids.add(item.get("id"))
+
+            if combined_hits:
+                print("📂 Vector search hits:")
+                for idx, item in enumerate(combined_hits[:5]):
+                    score = item.get("score")
+                    mem_text = item.get("memory", "")
+                    score_display = f"{score:.3f}" if isinstance(score, (int, float)) else score
+                    print(f"  {idx + 1}. score={score_display} text={mem_text[:500]}")
+            else:
+                print("📂 Vector search hits: none")
+
+            similar_memories = [r["memory"] for r in combined_hits if r.get("score", 0) > 0.2]
             memory_context = "\n".join(similar_memories)
             if memory_context:
                 print(f"📚 Retrieved {len(similar_memories)} related memories from vector store.")
                 chat_context += f"\n\n[Relevant Past Knowledge]\n{memory_context}"
         except Exception as search_err:
             print("⚠️ Memory search failed:", search_err)
-
-
 
         # --- 4️⃣ Run Agent asynchronously ---
         try:
@@ -449,11 +417,22 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
                 f"[Session: {session_id}] [Time: {datetime.now().isoformat()}]\n"
                 f"Context:\n{chat_context}\n\nTeacher: {prompt}\nStudent:"
             )
+            print(f"🧾 LLM context preview (first 1000 chars):\n{chat_context[:1000]}")
 
             result = await Runner.run(agent, user_prompt)
-            reply = getattr(result, "final_output", "").strip()
+            raw_reply = getattr(result, "final_output", "")
+            print(f"📝 Raw LLM reply: {raw_reply!r}")
+            reply = raw_reply.strip()
             if not reply:
                 reply = "⚠️ Agent returned no output."
+
+            reply, action_data = sanitize_reply(reply)
+            if action_data:
+                print(f"🧭 Parsed system action: {action_data}")
+                sys_reply, _ = handle_system_action(action_data, session_id, m)
+                if sys_reply:
+                    print(f"⚙️ System action executed: {action_data}")
+                    return {"response": sys_reply, "session_id": session_id}
         except Exception as agent_err:
             print("❌ Agent execution failed:", agent_err)
             traceback.print_exc()
@@ -461,6 +440,7 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
 
         # --- 5️⃣ Store in local memory ---
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply}"
+        print(f"🧠 Storing short-term memory snippet:\n{conversation_summary[:300]}")
         m.add(
             conversation_summary,
             user_id="sree",
@@ -491,8 +471,9 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
 
     finally:
         try:
-            conn.close()
-            print("🔒 SQLite connection closed.")
+            if conn:
+                conn.close()
+                print("🔒 SQLite connection closed.")
         except Exception as e:
             print("⚠️ Error closing DB:", e)
 
