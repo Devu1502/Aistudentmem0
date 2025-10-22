@@ -3,6 +3,7 @@ import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from intent_utils import detect_dev_command, handle_system_action, sanitize_reply
 from memory import LocalMemory, LocalOllamaEmbedder
+from teach_mode import is_teach_mode_on, set_teach_mode
 
 app = FastAPI(title="Mem0 Local Memory System")
 # Must come immediately after FastAPI initialization
@@ -104,6 +105,7 @@ Your role:
 - For casual greetings like 'hi', respond naturally referencing recent history or asking how to proceed, e.g., 'Hi! We've been chatting about [topic]—want to continue or switch things up?'
 - When asked about chat history or context (e.g., 'what do you see about X?'), reference specific past messages with timestamps if provided, then offer to continue or change topic.
 - Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content.
+- If you see '[TeachMode: ON]' in the session header, do not speak or explain. Respond with a single space character " " and nothing else. When '[TeachMode: OFF]' is present, continue responding normally.
 
 """
     ),
@@ -190,6 +192,17 @@ def get_session_id(session_id: str | None):
 @app.get("/")
 def root():
     return {"message": "Mem0 + Ollama + Qdrant fully local memory server running"}
+
+
+@app.get("/teach_mode")
+def get_teach_mode():
+    return {"teach_mode": is_teach_mode_on()}
+
+
+@app.post("/teach_mode")
+def update_teach_mode(enabled: bool = Query(..., description="Enable or disable Teach Mode")):
+    state = set_teach_mode(enabled)
+    return {"teach_mode": state}
 
 # 🧠 Add new memory (auto-routes to short/long/episodic)
 @app.post("/add")
@@ -345,6 +358,9 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
                 m.reset()
                 return {"response": "🧹 Memory store reset successfully.", "session_id": session_id}
 
+        teach_on = is_teach_mode_on()
+        print(f"🎓 Teach Mode is {'ON' if teach_on else 'OFF'}")
+
         # --- 1️⃣ Connect to SQLite ---
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         cur = conn.cursor()
@@ -384,7 +400,7 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
             )
             combined_hits = session_hits[:]
 
-            if len(combined_hits) < 100:
+            if len(combined_hits) < 5:
                 global_hits = extract_hits(m.search(query=prompt, user_id="sree", agent_id="general"))
                 seen_ids = {item.get("id") for item in combined_hits}
                 for item in global_hits:
@@ -413,18 +429,23 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
         # --- 4️⃣ Run Agent asynchronously ---
         try:
             print("🤖 Calling OpenAI Agent (async)...")
+            prompt_context = "" if teach_on else chat_context
             user_prompt = (
-                f"[Session: {session_id}] [Time: {datetime.now().isoformat()}]\n"
-                f"Context:\n{chat_context}\n\nTeacher: {prompt}\nStudent:"
+                f"[Session: {session_id}] [TeachMode: {'ON' if teach_on else 'OFF'}]\n"
+                f"[Time: {datetime.now().isoformat()}]\n"
+                f"Context:\n{prompt_context}\n\nTeacher: {prompt}\nStudent:"
             )
-            print(f"🧾 LLM context preview (first 1000 chars):\n{chat_context[:1000]}")
+            print(f"🧾 LLM context preview (first 1000 chars):\n{prompt_context[:1000]}")
 
             result = await Runner.run(agent, user_prompt)
             raw_reply = getattr(result, "final_output", "")
             print(f"📝 Raw LLM reply: {raw_reply!r}")
-            reply = raw_reply.strip()
-            if not reply:
-                reply = "⚠️ Agent returned no output."
+            if teach_on:
+                reply = " "
+            else:
+                reply = raw_reply.strip()
+                if not reply:
+                    reply = "⚠️ Agent returned no output."
 
             reply, action_data = sanitize_reply(reply)
             if action_data:
