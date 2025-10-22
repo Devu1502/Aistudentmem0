@@ -53,70 +53,47 @@ if not os.getenv("OPENAI_API_KEY"):
     raise EnvironmentError("❌ OPENAI_API_KEY not found in environment!")
 
 
-# ============================================================
 # AGENT CONFIG
-# ============================================================
 agent = Agent(
     name="AI Learner",
     instructions=(
-        """You are a student being taught step by step by a teacher.
-Each chat session focuses on exactly one topic provided by the system.
-You are a student being taught step by step.
-then ground the topic and learn only about that topic in a given session, you can change topic if the user wants to only;
-Never ask again for the topic once it is set.
-Do not repeat greetings or introductions after the first message.
-Never start messages with “Hi, I am your AI student” unless explicitly told to greet.
-Reflect only what the teacher says about this topic.
-If nothing has been taught yet, say 'You haven’t taught me anything yet.'
+        """You are a friendly AI buddy who learns and reflects through chat.
+You respond naturally, focusing on what the teacher says or what is already present in the chat or referenced documents.
+You do not use model knowledge outside of what’s given in the context (temperature = 0).
 
-At the beginning of the conversation, if the user has not yet provided a topic, greet with:
+At the start of the conversation, greet once naturally:
 ###
-"Hello! What topic would you like to teach me today?"
+"I’m your AI buddy! What would you like to teach me today?"
 ###
-Throughout the conversation, if the user provides a topic name (short phrase like 'Computational Thinking') when no topic is yet set, confirm it with 'Understood! The topic is [topic]. You haven’t taught me anything yet. What would you like to teach me first?' and set it for the session.
 
-When the teacher explains something new, repeat it back in 1–2 sentences maximum,
-then ask one short clarifying question. Clarifying questions must sound curious,
-e.g., 'So what is X?', 'Can you give me an example?', or 'Does that mean Y?'.
-Always treat the latest user message as potential new teaching content to reflect and clarify if relevant to the topic.
-when asked what you have learned till date, always summarize everything fully from the chat history, including timestamps if available.
-Never invent knowledge, never explain beyond what was taught.
-You are only reflecting the teacher's words.
-If nothing has been taught yet, say 'You haven’t taught me anything yet.' and also:
+During the conversation:
+- Treat the latest user message as potential new teaching content or question.
+- When the teacher explains something new, respond concisely with a short acknowledgment like “Understood!” or “Got it!” and a brief summary if needed.
+- Reflect only what the teacher says or what’s already available in the conversation or reference docs.
+- You may answer user questions that refer to any previous chat context, topic, or information found in documents or memory.
+- If something isn’t found in the context or history, say “Nothing has been taught yet on this content as I checked our past chats.”
+- Avoid asking for topics again; respond smoothly even if no topic is set.
+- Stay conversational, natural, and curious, but concise.
+- When asked to summarize, do so briefly and clearly.
 
 Special instructions for new topic/session management:
-- Always remember the current topic for the session once set.
-- If the teacher clearly says to change topic, output:
-If the teacher clearly says to change topic or start new session, output a hidden signal in this format:
-<system_action>topic=NEW_TOPIC</system_action> or <system_action>session=new</system_action>
-If the teacher asks to clear memory or reset, use <system_action>reset</system_action>.
- eg: "Let's switch topics to Quantum Computing." or "Start a new session on Machine Learning."
- response: <system_action>topic=Quantum Computing</system_action> or <system_action>session=new</system_action>
-- If the teacher asks to clear memory or reset, use <system_action>reset</system_action>.
-- Never output these system actions unless explicitly triggered by the teacher's request.
-- if both are asked like new session new topic - do both actions together. eg: user: "Start a new session on Astrophysics and new session."; response: <system_action>session=new;topic=Astrophysics</system_action>
-- Apply above only if word "NEW" is used by the teacher eg: "new topic", "new session".
+- If the teacher says to change topic, use:
+  <system_action>topic=NEW_TOPIC</system_action>
+- If the teacher says to start a new session, use:
+  <system_action>session=new</system_action>
+- If the teacher says to clear memory or reset, use:
+  <system_action>reset</system_action>
+- If both are requested together (e.g., “new topic and new session”), use:
+  <system_action>session=new;topic=NEW_TOPIC</system_action>
+- Only apply these actions if the teacher explicitly uses the word “NEW”.
 
-Your role:
-- If no topic is set, politely ask what topic to learn.
-- Once the topic is set, never re-ask for it.
-- Listen carefully to what the teacher says about that topic.
-- Reflect only what was taught in this session.
-- Avoid summarizing prior greetings or instructions.
-- Do not say what you have learned unless directly asked.
-- When asked to summarize, do so concisely (1–2 sentences).
-- Never invent or add external knowledge.
-- Stay only on this topic.
-- If the user asks about something unrelated to the current topic, first check if it's mentioned in the full chat history; if yes, answer based on that context briefly, then suggest: 'That sounds interesting! Would you like to switch our learning topic to [unrelated thing], or continue with [current topic]?'
-- For casual greetings like 'hi', respond naturally referencing recent history or asking how to proceed, e.g., 'Hi! We've been chatting about [topic]—want to continue or switch things up?'
-- When asked about chat history or context (e.g., 'what do you see about X?'), reference specific past messages with timestamps if provided, then offer to continue or change topic.
-- Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content.
-
+Always keep tone conversational, polite, and focused on the user’s input and prior context.
 """
     ),
     model="gpt-5-nano",
 )
 logger.info("Configured agent %s using model %s", agent.name, getattr(agent, "model", "unknown"))
+
 
 # model="openai/gpt-oss-20b:free",  # ✅ local proxy model (OpenRouter)
     # model="gpt-4.1",
@@ -181,6 +158,29 @@ def end_session(session_id, summary=""):
                 (datetime.now(), summary, session_id))
     con.commit()
     con.close()
+
+def ensure_session_tables(conn: sqlite3.Connection):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS session_meta (
+            session_id TEXT PRIMARY KEY
+        );
+        """
+    )
+    conn.commit()
+
+    cur = conn.execute("PRAGMA table_info(session_meta)")
+    existing_columns = {row[1] for row in cur.fetchall()}
+
+    required_columns = {
+        "title": "TEXT",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    }
+    for column, col_type in required_columns.items():
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE session_meta ADD COLUMN {column} {col_type}")
+    conn.commit()
 
 
 # -----------------------------------------------------------
@@ -261,6 +261,111 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         raise HTTPException(status_code=500, detail={"errors": errors})
 
     return {"uploaded": uploaded, "errors": errors}
+
+
+@app.get("/sidebar_sessions")
+def sidebar_sessions():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        ensure_session_tables(conn)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT ch.session_id,
+                   COALESCE(sm.title, '') AS title,
+                   MAX(ch.timestamp) AS last_time
+            FROM chat_history ch
+            LEFT JOIN session_meta sm ON sm.session_id = ch.session_id
+            GROUP BY ch.session_id
+            ORDER BY last_time DESC
+        """)
+        sessions = []
+        for row in cur.fetchall():
+            session_id = row["session_id"]
+            cur.execute(
+                "SELECT user_input, ai_output, timestamp FROM chat_history WHERE session_id=? ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            )
+            last_msg = cur.fetchone()
+            preview = ""
+            if last_msg:
+                preview = last_msg["user_input"] or last_msg["ai_output"] or ""
+
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "title": row["title"],
+                    "last_message_time": row["last_time"],
+                    "preview": preview,
+                }
+            )
+        return {"sessions": sessions}
+    finally:
+        conn.close()
+
+
+@app.delete("/delete_session")
+def delete_session(session_id: str = Query(...)):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    try:
+        ensure_session_tables(conn)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM chat_history WHERE session_id=?", (session_id,))
+        cur.execute("DELETE FROM session_meta WHERE session_id=?", (session_id,))
+        conn.commit()
+        return {"message": f"Session {session_id} deleted."}
+    finally:
+        conn.close()
+
+
+@app.post("/rename_session")
+def rename_session(session_id: str = Query(...), new_name: str = Query(...)):
+    if not new_name.strip():
+        raise HTTPException(status_code=400, detail="new_name cannot be empty.")
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    try:
+        ensure_session_tables(conn)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO session_meta (session_id, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                title=excluded.title,
+                updated_at=excluded.updated_at
+            """,
+            (session_id, new_name.strip(), datetime.utcnow().isoformat(), datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        return {"message": f"Session {session_id} renamed."}
+    finally:
+        conn.close()
+
+
+@app.get("/session_messages")
+def session_messages(session_id: str = Query(...)):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_input, ai_output, timestamp FROM chat_history WHERE session_id=? ORDER BY id ASC",
+            (session_id,),
+        )
+        rows = cur.fetchall()
+        messages = []
+        for row in rows:
+            if row["user_input"]:
+                messages.append(
+                    {"role": "teacher", "content": row["user_input"], "timestamp": row["timestamp"]}
+                )
+            if row["ai_output"]:
+                messages.append(
+                    {"role": "assistant", "content": row["ai_output"], "timestamp": row["timestamp"]}
+                )
+        return {"messages": messages}
+    finally:
+        conn.close()
 
 # 🧠 Add new memory (auto-routes to short/long/episodic)
 @app.post("/add")
@@ -422,6 +527,7 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         cur = conn.cursor()
         print(f"✅ Opened DB connection for session {session_id}")
+        ensure_session_tables(conn)
 
         # --- 2️⃣ Ensure table exists ---
         cur.execute("""
@@ -530,7 +636,7 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
                 f"Context:\n{chat_context if not teach_on else ''}\n\nTeacher: {prompt}\nStudent:"
             )
             preview_context = "" if teach_on else chat_context
-            print(f"🧾 LLM context preview (first 1000 chars):\n{preview_context[:1000]}")
+            print(f"🧾 LLM context preview (first 1000 chars):\n{preview_context[:5000]}")
 
             result = await Runner.run(agent, user_prompt)
             raw_reply = getattr(result, "final_output", "")
@@ -569,6 +675,14 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
         cur.execute(
             "INSERT INTO chat_history (session_id, user_input, ai_output, timestamp) VALUES (?, ?, ?, ?);",
             (session_id, prompt, reply, datetime.now().isoformat()),
+        )
+        cur.execute(
+            "INSERT OR IGNORE INTO session_meta (session_id, created_at) VALUES (?, ?)",
+            (session_id, datetime.utcnow().isoformat()),
+        )
+        cur.execute(
+            "UPDATE session_meta SET created_at=COALESCE(created_at, ?), updated_at=? WHERE session_id=?",
+            (datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), session_id),
         )
         conn.commit()
         print("💾 Chat record inserted successfully.")
