@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Query, Request, HTTPException
+from fastapi import FastAPI, Query, Request, HTTPException, UploadFile, File
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from intent_utils import detect_dev_command, handle_system_action, sanitize_reply
 from memory import LocalMemory, LocalOllamaEmbedder
 from teach_mode import is_teach_mode_on, set_teach_mode
+from doc_store import DocumentStore
 
 app = FastAPI(title="Mem0 Local Memory System")
 # Must come immediately after FastAPI initialization
@@ -22,6 +23,7 @@ app.add_middleware(
 
 
 import ollama
+from markitdown import MarkItDown
 
 from datetime import datetime
 from agents import Agent  # assumes same folder; adjust if different
@@ -37,9 +39,12 @@ from qdrant_client import QdrantClient
 qdrant = QdrantClient(url="http://localhost:6333")
 local_embedder = LocalOllamaEmbedder()
 m = LocalMemory(qdrant, local_embedder)
+document_store = DocumentStore(qdrant, local_embedder)
 
 from dotenv import load_dotenv
 import os
+import tempfile
+from typing import List, Dict, Any
 
 # Load environment variables from .env
 load_dotenv("/Users/sreekanthgopi/Desktop/Apps/AIStudentMem0/.env")
@@ -79,7 +84,7 @@ Never invent knowledge, never explain beyond what was taught.
 You are only reflecting the teacher's words.
 If nothing has been taught yet, say 'You haven’t taught me anything yet.' and also:
 
-Special instructions for topic/session management:
+Special instructions for new topic/session management:
 - Always remember the current topic for the session once set.
 - If the teacher clearly says to change topic, output:
 If the teacher clearly says to change topic or start new session, output a hidden signal in this format:
@@ -90,6 +95,7 @@ If the teacher asks to clear memory or reset, use <system_action>reset</system_a
 - If the teacher asks to clear memory or reset, use <system_action>reset</system_action>.
 - Never output these system actions unless explicitly triggered by the teacher's request.
 - if both are asked like new session new topic - do both actions together. eg: user: "Start a new session on Astrophysics and new session."; response: <system_action>session=new;topic=Astrophysics</system_action>
+- Apply above only if word "NEW" is used by the teacher eg: "new topic", "new session".
 
 Your role:
 - If no topic is set, politely ask what topic to learn.
@@ -105,7 +111,6 @@ Your role:
 - For casual greetings like 'hi', respond naturally referencing recent history or asking how to proceed, e.g., 'Hi! We've been chatting about [topic]—want to continue or switch things up?'
 - When asked about chat history or context (e.g., 'what do you see about X?'), reference specific past messages with timestamps if provided, then offer to continue or change topic.
 - Keep your tone curious, natural, and conversational. Do not treat topic-setting messages as teaching content.
-- If you see '[TeachMode: ON]' in the session header, do not speak or explain. Respond with a single space character " " and nothing else. When '[TeachMode: OFF]' is present, continue responding normally.
 
 """
     ),
@@ -145,7 +150,7 @@ config = {
             "model": "nomic-embed-text:latest",
             "ollama_base_url": "http://localhost:11434",
         },
-    }, 
+    },
 }
 
 import sqlite3
@@ -203,6 +208,59 @@ def get_teach_mode():
 def update_teach_mode(enabled: bool = Query(..., description="Enable or disable Teach Mode")):
     state = set_teach_mode(enabled)
     return {"teach_mode": state}
+
+
+@app.post("/documents/upload")
+async def upload_documents(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided.")
+    if len(files) > 5:
+        raise HTTPException(status_code=400, detail="Upload up to five files at a time.")
+
+    md = MarkItDown(enable_plugins=False)
+    uploaded: List[Dict[str, Any]] = []
+    errors: List[Dict[str, str]] = []
+
+    for file in files:
+        suffix = os.path.splitext(file.filename or "document")[1] or ".bin"
+        try:
+            contents = await file.read()
+            if not contents:
+                raise ValueError("Empty file.")
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(contents)
+                tmp_path = tmp.name
+
+            try:
+                result = md.convert(tmp_path)
+                text_content = (result.text_content or "").strip()
+                if not text_content:
+                    raise ValueError("No text extracted from document.")
+
+                metadata = {
+                    "filename": file.filename,
+                    "content_type": file.content_type,
+                    "uploaded_at": datetime.utcnow().isoformat(),
+                }
+                store_result = document_store.add_document(file.filename or "Untitled", text_content, metadata=metadata)
+                uploaded.append(
+                    {
+                        "filename": file.filename,
+                        "doc_id": store_result["doc_id"],
+                        "chunks": store_result["chunks"],
+                    }
+                )
+            finally:
+                os.remove(tmp_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to ingest document %s", file.filename)
+            errors.append({"filename": file.filename, "error": str(exc)})
+
+    if not uploaded and errors:
+        raise HTTPException(status_code=500, detail={"errors": errors})
+
+    return {"uploaded": uploaded, "errors": errors}
 
 # 🧠 Add new memory (auto-routes to short/long/episodic)
 @app.post("/add")
@@ -336,6 +394,8 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
       • Returns structured response
     """
     conn: sqlite3.Connection | None = None
+    teach_on = is_teach_mode_on()
+    print(f"🎓 Teach Mode is {'ON' if teach_on else 'OFF'}")
     try:
         # --- 0️⃣ Ensure session_id ---
         if not session_id:
@@ -358,9 +418,6 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
                 m.reset()
                 return {"response": "🧹 Memory store reset successfully.", "session_id": session_id}
 
-        teach_on = is_teach_mode_on()
-        print(f"🎓 Teach Mode is {'ON' if teach_on else 'OFF'}")
-
         # --- 1️⃣ Connect to SQLite ---
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         cur = conn.cursor()
@@ -379,63 +436,101 @@ async def chat(request: Request, prompt: str, session_id: str | None = None):
         conn.commit()
 
         # --- 3️⃣ Fetch previous context ---
-        # --- 3️⃣ Fetch chat history for this session ---
-        cur.execute(
-            "SELECT user_input, ai_output FROM chat_history WHERE session_id=? ORDER BY id ASC;",
-            (session_id,),
-        )
-        rows = cur.fetchall()
-        chat_context = "\n".join(
-            [f"Teacher: {r[0]}\nStudent: {r[1]}" for r in rows if r[0] or r[1]]
-        )
-        print(f"🧠 Loaded {len(rows)} previous messages for context.")
+        if teach_on:
+            rows = []
+            chat_context = ""
+            print("🧠 Teach Mode active — skipping chat history aggregation.")
+        else:
+            cur.execute(
+                "SELECT user_input, ai_output FROM chat_history WHERE session_id=? ORDER BY id ASC;",
+                (session_id,),
+            )
+            rows = cur.fetchall()
+            chat_context = "\n".join(
+                [f"Teacher: {r[0]}\nStudent: {r[1]}" for r in rows if r[0] or r[1]]
+            )
+            print(f"🧠 Loaded {len(rows)} previous messages for context.")
 
         # --- 3️⃣.5 Fetch related memories from Qdrant ---
-        try:
-            def extract_hits(result):
-                return result.get("results", []) if isinstance(result, dict) else (result or [])
+        if not teach_on:
+            try:
+                def extract_hits(result):
+                    return result.get("results", []) if isinstance(result, dict) else (result or [])
 
-            session_hits = extract_hits(
-                m.search(query=prompt, user_id="sree", agent_id="general", run_id=session_id)
-            )
-            combined_hits = session_hits[:]
+                session_hits = extract_hits(
+                    m.search(query=prompt, user_id="sree", agent_id="general", run_id=session_id)
+                )
+                combined_hits = session_hits[:]
 
-            if len(combined_hits) < 5:
-                global_hits = extract_hits(m.search(query=prompt, user_id="sree", agent_id="general"))
-                seen_ids = {item.get("id") for item in combined_hits}
-                for item in global_hits:
-                    if item.get("id") not in seen_ids:
-                        combined_hits.append(item)
-                        seen_ids.add(item.get("id"))
+                if len(combined_hits) < 5:
+                    global_hits = extract_hits(m.search(query=prompt, user_id="sree", agent_id="general"))
+                    seen_ids = {item.get("id") for item in combined_hits}
+                    for item in global_hits:
+                        if item.get("id") not in seen_ids:
+                            combined_hits.append(item)
+                            seen_ids.add(item.get("id"))
 
-            if combined_hits:
-                print("📂 Vector search hits:")
-                for idx, item in enumerate(combined_hits[:5]):
-                    score = item.get("score")
-                    mem_text = item.get("memory", "")
-                    score_display = f"{score:.3f}" if isinstance(score, (int, float)) else score
-                    print(f"  {idx + 1}. score={score_display} text={mem_text[:500]}")
-            else:
-                print("📂 Vector search hits: none")
+                if combined_hits:
+                    print("📂 Vector search hits:")
+                    for idx, item in enumerate(combined_hits[:5]):
+                        score = item.get("score")
+                        mem_text = item.get("memory", "")
+                        score_display = f"{score:.3f}" if isinstance(score, (int, float)) else score
+                        print(f"  {idx + 1}. score={score_display} text={mem_text[:500]}")
+                else:
+                    print("📂 Vector search hits: none")
 
-            similar_memories = [r["memory"] for r in combined_hits if r.get("score", 0) > 0.2]
-            memory_context = "\n".join(similar_memories)
-            if memory_context:
-                print(f"📚 Retrieved {len(similar_memories)} related memories from vector store.")
-                chat_context += f"\n\n[Relevant Past Knowledge]\n{memory_context}"
-        except Exception as search_err:
-            print("⚠️ Memory search failed:", search_err)
+                similar_memories = [r["memory"] for r in combined_hits if r.get("score", 0) > 0.2]
+                memory_context = "\n".join(similar_memories)
+                if memory_context:
+                    print(f"📚 Retrieved {len(similar_memories)} related memories from vector store.")
+                    chat_context += f"\n\n[Relevant Past Knowledge]\n{memory_context}"
+            except Exception as search_err:
+                print("⚠️ Memory search failed:", search_err)
+        else:
+            print("📂 Teach Mode active — skipping vector memory retrieval.")
+
+        # --- 3️⃣.6 Fetch uploaded document knowledge ---
+        if not teach_on:
+            try:
+                doc_results = document_store.search(prompt, limit=5)
+                doc_hits = doc_results.get("results", [])
+                if doc_hits:
+                    print("📑 Document hits:")
+                    doc_context_lines: List[str] = []
+                    for idx, item in enumerate(doc_hits[:3]):
+                        score = item.get("score")
+                        meta = item.get("metadata", {})
+                        title = meta.get("title") or meta.get("filename") or "Document"
+                        snippet = (item.get("memory") or "").strip()
+                        score_display = f"{score:.3f}" if isinstance(score, (int, float)) else score
+                        print(f"  {idx + 1}. score={score_display} title={title}")
+                        doc_context_lines.append(f"{title}:\n{snippet}")
+
+                    if doc_context_lines:
+                        print("🧾 Appending document context:")
+                        for preview in doc_context_lines:
+                            trimmed = preview.replace("\n", " ")
+                            print(f"    └ {trimmed[:160]}{'…' if len(trimmed) > 160 else ''}")
+                        doc_context = "\n\n".join(doc_context_lines)
+                        chat_context += f"\n\n[Uploaded Document Context]\n{doc_context}"
+                else:
+                    print("📑 Document hits: none")
+            except Exception as doc_err:  # noqa: BLE001
+                print("⚠️ Document retrieval failed:", doc_err)
+        else:
+            print("📑 Teach Mode active — skipping document retrieval.")
 
         # --- 4️⃣ Run Agent asynchronously ---
         try:
             print("🤖 Calling OpenAI Agent (async)...")
-            prompt_context = "" if teach_on else chat_context
             user_prompt = (
                 f"[Session: {session_id}] [TeachMode: {'ON' if teach_on else 'OFF'}]\n"
                 f"[Time: {datetime.now().isoformat()}]\n"
-                f"Context:\n{prompt_context}\n\nTeacher: {prompt}\nStudent:"
+                f"Context:\n{chat_context if not teach_on else ''}\n\nTeacher: {prompt}\nStudent:"
             )
-            print(f"🧾 LLM context preview (first 1000 chars):\n{prompt_context[:1000]}")
+            preview_context = "" if teach_on else chat_context
+            print(f"🧾 LLM context preview (first 1000 chars):\n{preview_context[:1000]}")
 
             result = await Runner.run(agent, user_prompt)
             raw_reply = getattr(result, "final_output", "")
