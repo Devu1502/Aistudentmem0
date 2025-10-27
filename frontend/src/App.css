@@ -3,8 +3,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: radial-gradient(circle at 15% 20%, rgba(59, 130, 246, 0.25), transparent 45%),
-    radial-gradient(circle at 85% 10%, rgba(16, 185, 129, 0.18), transparent 50%),
+  background: radial-gradient(circle at 15% 20%, rgba(126, 34, 206, 0.24), transparent 45%),
+    radial-gradient(circle at 85% 10%, rgba(168, 85, 247, 0.16), transparent 50%),
     linear-gradient(135deg, #020617 0%, #0f172a 35%, #111827 100%);
   padding: 32px 24px;
   box-sizing: border-box;
@@ -53,9 +53,9 @@
 }
 
 .ghost-button {
-  background: rgba(148, 163, 184, 0.12);
+  background: rgba(168, 85, 247, 0.12);
   color: #f1f5f9;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgba(168, 85, 247, 0.35);
   border-radius: 999px;
   padding: 6px 18px;
   font-size: 0.85rem;
@@ -65,8 +65,8 @@
 }
 
 .ghost-button:hover {
-  background: rgba(148, 163, 184, 0.25);
-  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(168, 85, 247, 0.25);
+  border-color: rgba(168, 85, 247, 0.55);
 }
 
 .ghost-button.large {
@@ -85,9 +85,9 @@
 }
 
 .teach-toggle.active {
-  background: rgba(74, 222, 128, 0.18);
-  border-color: rgba(74, 222, 128, 0.55);
-  color: #bbf7d0;
+  background: rgba(147, 51, 234, 0.18);
+  border-color: rgba(147, 51, 234, 0.55);
+  color: #e9d5ff;
 }
 
 .sidebar-section {
@@ -108,7 +108,7 @@
 .sidebar-section p {
   margin: 0;
   font-size: 0.9rem;
-  color: #cbd5f5;
+  color: #e9d5ff;
   line-height: 1.6;
 }
 
@@ -122,9 +122,9 @@
   align-items: center;
   padding: 6px 10px;
   border-radius: 12px;
-  border: 1px solid rgba(94, 234, 212, 0.45);
-  background: rgba(13, 148, 136, 0.15);
-  color: #5eead4;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  background: rgba(126, 34, 206, 0.16);
+  color: #d8b4fe;
   font-size: 0.8rem;
   font-family: "Menlo", "Fira Code", "JetBrains Mono", monospace;
   word-break: break-all;
@@ -152,8 +152,8 @@
 .command {
   font-family: "Menlo", "Fira Code", "JetBrains Mono", monospace;
   font-size: 0.85rem;
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.18);
+  color: #f5d0fe;
+  background: rgba(126, 34, 206, 0.18);
   padding: 4px 8px;
   border-radius: 6px;
   width: fit-content;
@@ -210,15 +210,15 @@
 }
 
 .status-badge.idle {
-  background: rgba(134, 239, 172, 0.3);
-  color: #166534;
-  border: 1px solid rgba(22, 101, 52, 0.35);
+  background: rgba(233, 213, 255, 0.35);
+  color: #5b21b6;
+  border: 1px solid rgba(91, 33, 182, 0.35);
 }
 
 .status-badge.typing {
-  background: rgba(125, 211, 252, 0.35);
-  color: #0369a1;
-  border: 1px solid rgba(3, 105, 161, 0.35);
+  background: rgba(196, 181, 253, 0.35);
+  color: #4c1d95;
+  border: 1px solid rgba(76, 29, 149, 0.35);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -267,11 +267,11 @@
 }
 
 .message-avatar.teacher {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #7e22ce, #5b21b6);
 }
 
 .message-avatar.student {
-  background: linear-gradient(135deg, #059669, #10b981);
+  background: linear-gradient(135deg, #a855f7, #8b5cf6);
 }
 
 .message-avatar.system {
@@ -291,7 +291,7 @@
 }
 
 .message-bubble.teacher {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #7e22ce, #5b21b6);
   color: #f8fafc;
   border-top-right-radius: 6px;
 }
@@ -354,7 +354,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #0ea5e9;
+  background: #a855f7;
   opacity: 0.75;
   animation: typing-bounce 1.2s infinite ease-in-out;
 }
@@ -412,8 +412,8 @@
 
 .chat-textarea:focus {
   outline: none;
-  border-color: rgba(37, 99, 235, 0.7);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  border-color: rgba(168, 85, 247, 0.7);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
   background: #ffffff;
 }
 
@@ -443,15 +443,17 @@ button.secondary-button {
   gap: 6px;
 }
 
+
 .primary-button {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: #7e22ce;
   color: #f8fafc;
-  box-shadow: 0 14px 24px -18px rgba(29, 78, 216, 0.6);
+  box-shadow: 0 14px 24px -18px rgba(126, 34, 206, 0.55);
 }
 
 .primary-button:hover:not(:disabled) {
+  background: #6b21a8;
   transform: translateY(-1px);
-  box-shadow: 0 18px 24px -14px rgba(29, 78, 216, 0.55);
+  box-shadow: 0 18px 24px -14px rgba(107, 33, 168, 0.55);
 }
 
 .primary-button:disabled {
@@ -461,18 +463,21 @@ button.secondary-button {
 }
 
 .secondary-button {
-  background: rgba(148, 163, 184, 0.18);
-  color: #1e293b;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #9f67f8;
+  color: #f8fafc;
+  border: none;
+  box-shadow: 0 12px 20px -18px rgba(159, 103, 248, 0.55);
 }
 
 .secondary-button:hover:not(:disabled) {
-  background: rgba(148, 163, 184, 0.3);
+  background: #8b5cf6;
+  box-shadow: 0 14px 22px -16px rgba(139, 92, 246, 0.55);
 }
 
 .secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+  box-shadow: none;
 }
 
 .command-suggestions {
@@ -506,16 +511,16 @@ button.secondary-button {
 .command-suggestion strong {
   font-size: 0.85rem;
   font-family: "Menlo", "Fira Code", "JetBrains Mono", monospace;
-  color: #bfdbfe;
+  color: #f5d0fe;
 }
 
 .command-suggestion span {
   font-size: 0.8rem;
-  color: #cbd5f5;
+  color: #e9d5ff;
 }
 
 .command-suggestion:hover {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(126, 34, 206, 0.35);
   transform: translateY(-1px);
 }
 
@@ -601,13 +606,13 @@ button.secondary-button {
 }
 
 .session-item:hover {
-  background: rgba(59, 130, 246, 0.25);
-  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(147, 51, 234, 0.25);
+  border-color: rgba(168, 85, 247, 0.35);
 }
 
 .session-item.active {
-  background: rgba(59, 130, 246, 0.35);
-  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(147, 51, 234, 0.35);
+  border-color: rgba(147, 51, 234, 0.55);
 }
 
 .session-item strong {
@@ -620,7 +625,7 @@ button.secondary-button {
 
 .session-item .preview {
   font-size: 0.8rem;
-  color: #cbd5f5;
+  color: #e0c3ff;
   margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -650,7 +655,7 @@ button.secondary-button {
 }
 
 .session-actions button:hover {
-  color: #93c5fd;
+  color: #d8b4fe;
 }
 
 .mini-btn {
