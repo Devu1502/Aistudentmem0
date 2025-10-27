@@ -267,11 +267,11 @@
 }
 
 .message-avatar.teacher {
-  background: linear-gradient(135deg, #7e22ce, #5b21b6);
+  background: #7e22ce;
 }
 
 .message-avatar.student {
-  background: linear-gradient(135deg, #a855f7, #8b5cf6);
+  background: #a855f7;
 }
 
 .message-avatar.system {
@@ -291,7 +291,7 @@
 }
 
 .message-bubble.teacher {
-  background: linear-gradient(135deg, #7e22ce, #5b21b6);
+  background: #7e22ce;
   color: #f8fafc;
   border-top-right-radius: 6px;
 }

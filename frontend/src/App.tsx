@@ -618,9 +618,9 @@ export default function ChatApp() {
         <main className="chat-main">
           <header className="chat-header">
             <div>
-              <h2 className="chat-header-title">AI Student Mentor</h2>
+              <h2 className="chat-header-title">AI Buddy</h2>
               <p className="chat-header-subtitle">
-                Guide the learner and the assistant will respond with grounded context.
+                Hi! I'm your AI study companion in a virtual world.
               </p>
             </div>
           </header>
