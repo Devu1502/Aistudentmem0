@@ -284,12 +284,7 @@ export default function ChatApp() {
   };
 
   const handleNewChat = () => {
-    setMessages([
-      createMessage(
-        "system",
-        "New chat started. Use /topic <subject> when you're ready to begin teaching."
-      ),
-    ]);
+    setMessages([createMessage("system", "Hello! I am ready to learn.")]);
     setSessionId(null);
     setInput("");
     closeCommandPalette();
