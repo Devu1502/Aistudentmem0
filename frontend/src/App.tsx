@@ -728,14 +728,6 @@ export default function ChatApp() {
               >
                 {isUploading ? "Uploading…" : "Upload Docs"}
               </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setInput((prev) => `${prev}\n`)}
-                disabled={isSending}
-              >
-                New line
-              </button>
               <button type="submit" className="primary-button" disabled={isSending}>
                 {isSending ? "Sending…" : "Send"}
               </button>

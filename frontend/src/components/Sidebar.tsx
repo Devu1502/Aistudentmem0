@@ -98,24 +98,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       ? new Date(session.last_message_time).toLocaleString()
                       : ""}
                   </small>
-                  <div className="session-actions">
+                      <div className="session-actions">
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
-                            onStartRename(session.session_id, session.title || session.preview || "");
+                            onDeleteSession(session.session_id);
                           }}
                         >
-                          Edit
+                          🗑️
                         </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDeleteSession(session.session_id);
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
+                      </div>
                 </div>
               )}
             </li>
