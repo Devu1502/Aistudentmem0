@@ -1,5 +1,9 @@
-import React, { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+
+import { Sidebar } from "./components/Sidebar";
+import { useTeachMode } from "./hooks/useTeachMode";
+import { useSessions } from "./hooks/useSessions";
 
 type MessageRole = "teacher" | "student" | "system";
 
@@ -14,13 +18,6 @@ type CommandDefinition = {
   name: string;
   usage: string;
   description: string;
-};
-
-type SessionInfo = {
-  session_id: string;
-  last_message_time: string;
-  preview: string;
-  title?: string;
 };
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -93,41 +90,63 @@ export default function ChatApp() {
   const [isSending, setIsSending] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
-  const [teachMode, setTeachMode] = useState(false);
+  const { teachMode, refreshTeachMode, toggleTeachMode } = useTeachMode();
+  const { sessions, refreshing, fetchSessions, deleteSession, renameSession } = useSessions();
   const [isUploading, setIsUploading] = useState(false);
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const initialisedRef = useRef(false);
 
-  const pushSystemMessage = (text: string) => {
+  const pushSystemMessage = useCallback((text: string) => {
     setMessages((prev) => [...prev, createMessage("system", text)]);
-  };
+  }, []);
 
-  const fetchTeachMode = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/teach_mode`);
-      if (!res.ok) {
-        return;
+  const handleSelectSession = useCallback(
+    async (selectedSessionId: string) => {
+      try {
+        const res = await fetch(`${API_BASE}/session_messages?session_id=${selectedSessionId}`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        setSessionId(selectedSessionId);
+        setMessages(
+          (data.messages || []).map((m: any) => ({
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            role: m.role === "assistant" ? "student" : "teacher",
+            text: m.content,
+            createdAt: m.timestamp || new Date().toISOString(),
+          }))
+        );
+      } catch (err) {
+        console.error("Session load failed", err);
+        pushSystemMessage("⚠️ Failed to load session.");
       }
-      const data = await res.json();
-      setTeachMode(Boolean(data?.teach_mode));
-    } catch (error) {
-      console.error("Failed to load Teach Mode state", error);
-    }
-  };
+    },
+    [pushSystemMessage]
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSending]);
 
   useEffect(() => {
-    fetchTeachMode();
-    fetchSessions(true);
-  }, []);
+    if (initialisedRef.current) {
+      return;
+    }
+    initialisedRef.current = true;
+
+    const initialise = async () => {
+      await refreshTeachMode();
+      const list = await fetchSessions();
+      if (!sessionId && list.length > 0) {
+        await handleSelectSession(list[0].session_id);
+      }
+    };
+
+    initialise();
+  }, [fetchSessions, handleSelectSession, refreshTeachMode, sessionId]);
 
   const filteredCommands = useMemo(() => {
     if (!showSuggestions) {
@@ -147,27 +166,14 @@ export default function ChatApp() {
     setCommandQuery("");
   };
 
-  const updateTeachMode = async (enabled: boolean) => {
-    try {
-      const res = await fetch(`${API_BASE}/teach_mode?enabled=${enabled}`, { method: "POST" });
-      if (!res.ok) {
-        const text = await res.text();
-        pushSystemMessage(`❌ Teach Mode update failed: ${text || res.statusText}`);
-        return;
-      }
-      const data = await res.json();
-      const state = Boolean(data?.teach_mode);
-      setTeachMode(state);
-      pushSystemMessage(`Teach Mode ${state ? "ON" : "OFF"}.`);
-    } catch (error) {
-      console.error("Failed to update Teach Mode", error);
+  const handleToggleTeachMode = useCallback(async () => {
+    const success = await toggleTeachMode(!teachMode);
+    if (success) {
+      pushSystemMessage(`Teach Mode ${!teachMode ? "ON" : "OFF"}.`);
+    } else {
       pushSystemMessage("⚠️ Could not reach the Teach Mode endpoint.");
     }
-  };
-
-  const handleToggleTeachMode = async () => {
-    await updateTeachMode(!teachMode);
-  };
+  }, [teachMode, toggleTeachMode, pushSystemMessage]);
 
   const handleFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const fileList = event.target.files;
@@ -221,29 +227,10 @@ export default function ChatApp() {
     }
   };
 
-  const fetchSessions = async (autoLoad: boolean = false) => {
-    setRefreshing(true);
-    try {
-      const res = await fetch(`${API_BASE}/sidebar_sessions`);
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      const list: SessionInfo[] = Array.isArray(data.sessions) ? data.sessions : [];
-      setSessions(list);
-      if (autoLoad && list.length > 0) {
-        await handleSelectSession(list[0].session_id);
-      }
-    } catch (err) {
-      console.error("Sidebar fetch failed", err);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleDeleteSession = async (sessionIdToDelete: string) => {
+  const handleDeleteSession = useCallback(async (sessionIdToDelete: string) => {
     if (!window.confirm("Delete this chat permanently?")) return;
     try {
-      const res = await fetch(`${API_BASE}/delete_session?session_id=${sessionIdToDelete}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      await deleteSession(sessionIdToDelete);
       if (sessionId === sessionIdToDelete) {
         setSessionId(null);
         setMessages([
@@ -253,52 +240,36 @@ export default function ChatApp() {
           ),
         ]);
       }
-      await fetchSessions(sessionId === sessionIdToDelete);
     } catch (err) {
       console.error("Delete failed", err);
       pushSystemMessage("⚠️ Failed to delete session.");
     }
-  };
+  }, [deleteSession, pushSystemMessage, sessionId]);
 
-  const handleRenameSession = async (sessionId: string) => {
+  const handleRenameSession = useCallback(async (sessionId: string) => {
     if (!newTitle.trim()) {
       pushSystemMessage("Provide a new title before saving.");
       return;
     }
     try {
-      const res = await fetch(
-        `${API_BASE}/rename_session?session_id=${sessionId}&new_name=${encodeURIComponent(newTitle.trim())}`,
-        { method: "POST" }
-      );
-      if (!res.ok) throw new Error(await res.text());
+      await renameSession(sessionId, newTitle.trim());
       setEditingSession(null);
       setNewTitle("");
-      await fetchSessions();
     } catch (err) {
       console.error("Rename failed", err);
       pushSystemMessage("⚠️ Failed to rename session.");
     }
-  };
+  }, [newTitle, pushSystemMessage, renameSession]);
 
-  const handleSelectSession = async (sessionId: string) => {
-    try {
-      const res = await fetch(`${API_BASE}/session_messages?session_id=${sessionId}`);
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setSessionId(sessionId);
-      setMessages(
-        (data.messages || []).map((m: any) => ({
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          role: m.role === "assistant" ? "student" : "teacher",
-          text: m.content,
-          createdAt: m.timestamp || new Date().toISOString(),
-        }))
-      );
-    } catch (err) {
-      console.error("Session load failed", err);
-      pushSystemMessage("⚠️ Failed to load session.");
-    }
-  };
+  const handleStartRename = useCallback((sessionId: string, currentTitle: string) => {
+    setEditingSession(sessionId);
+    setNewTitle(currentTitle);
+  }, []);
+
+  const handleRenameCancel = useCallback(() => {
+    setEditingSession(null);
+    setNewTitle("");
+  }, []);
 
   const handleInputChange = (value: string) => {
     setInput(value);
@@ -394,14 +365,10 @@ export default function ChatApp() {
 
   const handleCommand = async (rawCommand: string) => {
     const stripped = rawCommand.slice(1).trim();
-    const commandMessage = createMessage("teacher", rawCommand);
+    console.log("Command executed:", rawCommand);
 
     if (!stripped) {
-      setMessages((prev) => [
-        ...prev,
-        commandMessage,
-        createMessage("system", "Type /help to see the available commands."),
-      ]);
+      pushSystemMessage("Type /help to see the available commands.");
       return;
     }
 
@@ -411,7 +378,6 @@ export default function ChatApp() {
     const appendSystem = (...systemTexts: string[]) => {
       setMessages((prev) => [
         ...prev,
-        commandMessage,
         ...systemTexts.map((text) => createMessage("system", text)),
       ]);
     };
@@ -453,11 +419,7 @@ export default function ChatApp() {
           const data = await res.json();
           handleNewChat();
           setSessionId(data.session_id ?? null);
-          setMessages((prev) => [
-            ...prev,
-            commandMessage,
-            createMessage("system", data.message ?? "🆕 New session started."),
-          ]);
+          pushSystemMessage(data.message ?? "🆕 New session started.");
         } catch (error) {
           console.error(error);
           appendSystem("⚠️ Could not start a new session.");
@@ -631,113 +593,27 @@ export default function ChatApp() {
   return (
     <div className="chat-app">
       <div className="chat-shell">
-        <aside className="chat-sidebar">
-          <div className="sidebar-header">
-            <button className="ghost-button large" onClick={handleNewChat}>
-              + New Chat
-            </button>
-            <button className="ghost-button" onClick={() => fetchSessions()} disabled={refreshing}>
-              {refreshing ? "Refreshing…" : "↻ Refresh"}
-            </button>
-          </div>
-
-          <div className="sidebar-section">
-            <h2>Chats</h2>
-            <ul className="session-list">
-              {sessions.length === 0 && <li className="empty">No chats yet.</li>}
-              {sessions.map((s) => (
-                <li
-                  key={s.session_id}
-                  className={`session-item ${sessionId === s.session_id ? "active" : ""}`}
-                >
-                  {editingSession === s.session_id ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleRenameSession(s.session_id);
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder="New title"
-                        autoFocus
-                      />
-                      <button type="submit" className="mini-btn">
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        className="mini-btn"
-                        onClick={() => {
-                          setEditingSession(null);
-                          setNewTitle("");
-                        }}
-                      >
-                        ✖
-                      </button>
-                    </form>
-                  ) : (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleSelectSession(s.session_id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          handleSelectSession(s.session_id);
-                        }
-                      }}
-                    >
-                      <strong>{s.title || s.preview.slice(0, 30) || "Untitled Chat"}</strong>
-                      <p className="preview">{s.preview || "No messages"}</p>
-                      <small>
-                        {s.last_message_time
-                          ? new Date(s.last_message_time).toLocaleString()
-                          : ""}
-                      </small>
-                      <div className="session-actions">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingSession(s.session_id);
-                            setNewTitle(s.title || s.preview || "");
-                          }}
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteSession(s.session_id);
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="sidebar-section">
-            <h2>Teach Mode</h2>
-            <button
-              type="button"
-              className={`ghost-button teach-toggle ${teachMode ? "active" : ""}`}
-              onClick={handleToggleTeachMode}
-              disabled={isUploading || isSending}
-            >
-              {teachMode ? "Teach Mode: ON" : "Teach Mode: OFF"}
-            </button>
-            <p className="sidebar-hint">
-              When on, the student stays quiet so you can teach uninterrupted.
-            </p>
-          </div>
-        </aside>
+        <Sidebar
+          sessions={sessions}
+          activeSessionId={sessionId}
+          refreshing={refreshing}
+          teachMode={teachMode}
+          isSending={isSending}
+          isUploading={isUploading}
+          editingSession={editingSession}
+          newTitle={newTitle}
+          onNewChat={handleNewChat}
+          onRefresh={() => {
+            fetchSessions();
+          }}
+          onToggleTeachMode={handleToggleTeachMode}
+          onSelectSession={handleSelectSession}
+          onStartRename={handleStartRename}
+          onRenameSubmit={handleRenameSession}
+          onRenameCancel={handleRenameCancel}
+          onTitleChange={setNewTitle}
+          onDeleteSession={handleDeleteSession}
+        />
 
         <main className="chat-main">
           <header className="chat-header">
