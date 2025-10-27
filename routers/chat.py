@@ -35,13 +35,12 @@ async def chat_endpoint(
                     f"{idx + 1}. {item.get('memory', '')}\n   score: {item.get('score', '?')}"
                 )
             return {
-                "response":
-                f"🔍 Found {len(hits)} results for '{query}'.\n\n" + "\n\n".join(formatted),
+                "response": f"Found {len(hits)} results for '{query}'.\n\n" + "\n\n".join(formatted),
                 "context_count": 0,
                 "session_id": session_id,
             }
         if dev_cmd["cmd"] == "reset":
             memory_store.reset()
-            return {"response": "🧹 Memory store reset successfully.", "context_count": 0, "session_id": session_id}
+            return {"response": "Memory store reset successfully.", "context_count": 0, "session_id": session_id}
 
     return await chat_service.handle_chat(prompt, session_id)

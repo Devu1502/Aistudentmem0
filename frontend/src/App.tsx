@@ -78,12 +78,12 @@ const formatTime = (iso: string) =>
 const ROLE_META: Record<MessageRole, { label: string; initial: string }> = {
   teacher: { label: "Teacher", initial: "T" },
   student: { label: "Student", initial: "S" },
-  system: { label: "System", initial: "ℹ" },
+  system: { label: "System", initial: "S" },
 };
 
 export default function ChatApp() {
   const [messages, setMessages] = useState<Message[]>(() => [
-    createMessage("system", "Welcome! Let’s start when you’re ready to teach."),
+    createMessage("system", "Welcome! Let's start when you're ready to teach."),
   ]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -121,7 +121,7 @@ export default function ChatApp() {
         );
       } catch (err) {
         console.error("Session load failed", err);
-        pushSystemMessage("⚠️ Failed to load session.");
+        pushSystemMessage("Failed to load session.");
       }
     },
     [pushSystemMessage]
@@ -171,7 +171,7 @@ export default function ChatApp() {
     if (success) {
       pushSystemMessage(`Teach Mode ${!teachMode ? "ON" : "OFF"}.`);
     } else {
-      pushSystemMessage("⚠️ Could not reach the Teach Mode endpoint.");
+      pushSystemMessage("Could not reach the Teach Mode endpoint.");
     }
   }, [teachMode, toggleTeachMode, pushSystemMessage]);
 
@@ -200,7 +200,7 @@ export default function ChatApp() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        pushSystemMessage(`❌ Upload failed: ${errorText || response.statusText}`);
+        pushSystemMessage(`Upload failed: ${errorText || response.statusText}`);
         return;
       }
 
@@ -210,17 +210,17 @@ export default function ChatApp() {
 
       if (uploaded.length > 0) {
         const names = uploaded.map((item: any) => item?.filename || "document").join(", ");
-        pushSystemMessage(`📄 Uploaded ${uploaded.length} document(s): ${names}.`);
+        pushSystemMessage(`Uploaded ${uploaded.length} document(s): ${names}.`);
       }
 
       errors.forEach((err: any) => {
         if (err?.filename && err?.error) {
-          pushSystemMessage(`⚠️ ${err.filename}: ${err.error}`);
+          pushSystemMessage(`${err.filename}: ${err.error}`);
         }
       });
     } catch (error) {
       console.error("Upload failed", error);
-      pushSystemMessage("⚠️ Could not upload documents. Please try again.");
+      pushSystemMessage("Could not upload documents. Please try again.");
     } finally {
       setIsUploading(false);
       event.target.value = "";
@@ -242,7 +242,7 @@ export default function ChatApp() {
       }
     } catch (err) {
       console.error("Delete failed", err);
-      pushSystemMessage("⚠️ Failed to delete session.");
+      pushSystemMessage("Failed to delete session.");
     }
   }, [deleteSession, pushSystemMessage, sessionId]);
 
@@ -257,7 +257,7 @@ export default function ChatApp() {
       setNewTitle("");
     } catch (err) {
       console.error("Rename failed", err);
-      pushSystemMessage("⚠️ Failed to rename session.");
+        pushSystemMessage("Failed to rename session.");
     }
   }, [newTitle, pushSystemMessage, renameSession]);
 
@@ -333,7 +333,7 @@ export default function ChatApp() {
         const errorText = await response.text();
         setMessages((prev) => [
           ...prev,
-          createMessage("system", `❌ Server error: ${errorText || response.statusText}`),
+          createMessage("system", `Server error: ${errorText || response.statusText}`),
         ]);
         return;
       }
@@ -356,7 +356,7 @@ export default function ChatApp() {
       console.error(error);
       setMessages((prev) => [
         ...prev,
-        createMessage("system", "⚠️ Connection error. Confirm the FastAPI server is running."),
+        createMessage("system", "Connection error. Confirm the FastAPI server is running."),
       ]);
     } finally {
       setIsSending(false);
@@ -394,14 +394,14 @@ export default function ChatApp() {
         const res = await fetch(url.toString(), { method: "POST" });
         if (!res.ok) {
           const text = await res.text();
-          appendSystem(`❌ Topic update failed: ${text || res.statusText}`);
+          appendSystem(`Topic update failed: ${text || res.statusText}`);
           return;
         }
         const data = await res.json();
-        appendSystem(data.message ?? `✅ Topic set to '${topic}'.`);
+        appendSystem(data.message ?? `Topic set to '${topic}'.`);
       } catch (error) {
         console.error(error);
-        appendSystem("⚠️ Could not reach the topic endpoint.");
+        appendSystem("Could not reach the topic endpoint.");
       }
       return;
     }
@@ -413,16 +413,16 @@ export default function ChatApp() {
           const res = await fetch(`${API_BASE}/session`, { method: "POST" });
           if (!res.ok) {
             const text = await res.text();
-            appendSystem(`❌ Session start failed: ${text || res.statusText}`);
+            appendSystem(`Session start failed: ${text || res.statusText}`);
             return;
           }
           const data = await res.json();
           handleNewChat();
           setSessionId(data.session_id ?? null);
-          pushSystemMessage(data.message ?? "🆕 New session started.");
+          pushSystemMessage(data.message ?? "New session started.");
         } catch (error) {
           console.error(error);
-          appendSystem("⚠️ Could not start a new session.");
+          appendSystem("Could not start a new session.");
         }
       } else {
         appendSystem("Usage: /session new");
@@ -441,15 +441,15 @@ export default function ChatApp() {
         const res = await fetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
-          appendSystem(`❌ Summary failed: ${text || res.statusText}`);
+        appendSystem(`Summary failed: ${text || res.statusText}`);
           return;
         }
         const data = await res.json();
         const summary = typeof data.summary === "string" ? data.summary : JSON.stringify(data.summary);
-        appendSystem(`📘 Session summary:\n\n${summary}`);
+        appendSystem(`Session summary:\n\n${summary}`);
       } catch (error) {
         console.error(error);
-        appendSystem("⚠️ Could not retrieve the summary.");
+        appendSystem("Could not retrieve the summary.");
       }
       return;
     }
@@ -466,7 +466,7 @@ export default function ChatApp() {
         const res = await fetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
-          appendSystem(`❌ Topic search failed: ${text || res.statusText}`);
+          appendSystem(`Topic search failed: ${text || res.statusText}`);
           return;
         }
         const data = await res.json();
@@ -481,10 +481,10 @@ export default function ChatApp() {
               `${index + 1}. ${item?.memory ?? "—"}\n   score: ${item?.score?.toFixed?.(3) ?? "?"}`
           )
           .join("\n\n");
-        appendSystem(`🔍 Memories mentioning “${query}”:\n\n${formatted}`);
+        appendSystem(`Memories mentioning “${query}”:\n\n${formatted}`);
       } catch (error) {
         console.error(error);
-        appendSystem("⚠️ Could not reach the search endpoint.");
+        appendSystem("Could not reach the search endpoint.");
       }
       return;
     }
@@ -501,7 +501,7 @@ export default function ChatApp() {
         const res = await fetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
-          appendSystem(`❌ Search failed: ${text || res.statusText}`);
+          appendSystem(`Search failed: ${text || res.statusText}`);
           return;
         }
         const data = await res.json();
@@ -520,10 +520,10 @@ export default function ChatApp() {
             return `${index + 1}. ${memoryText}`;
           })
           .join("\n\n");
-        appendSystem(`🔍 Search results for “${query}”:\n\n${formatted}`);
+        appendSystem(`Search results for “${query}”:\n\n${formatted}`);
       } catch (error) {
         console.error(error);
-        appendSystem("⚠️ Could not reach the search API.");
+        appendSystem("Could not reach the search API.");
       }
       return;
     }
@@ -533,7 +533,7 @@ export default function ChatApp() {
         const res = await fetch(`${API_BASE}/all`);
         if (!res.ok) {
           const text = await res.text();
-          appendSystem(`❌ Fetch failed: ${text || res.statusText}`);
+        appendSystem(`Fetch failed: ${text || res.statusText}`);
           return;
         }
         const data = await res.json();
@@ -549,10 +549,10 @@ export default function ChatApp() {
             return `${index + 1}. ${base}${meta}`;
           })
           .join("\n\n");
-        appendSystem(`🗂️ Complete memory listing:\n\n${formatted}`);
+        appendSystem(`Complete memory listing:\n\n${formatted}`);
       } catch (error) {
         console.error(error);
-        appendSystem("⚠️ Could not fetch stored memories.");
+        appendSystem("Could not fetch stored memories.");
       }
       return;
     }
@@ -562,14 +562,14 @@ export default function ChatApp() {
         const res = await fetch(`${API_BASE}/reset`, { method: "POST" });
         if (!res.ok) {
           const text = await res.text();
-          appendSystem(`❌ Reset failed: ${text || res.statusText}`);
+        appendSystem(`Reset failed: ${text || res.statusText}`);
           return;
         }
         const data = await res.json();
         appendSystem(data?.message ?? "Memory reset complete.");
       } catch (error) {
         console.error(error);
-        appendSystem("⚠️ Could not reach the reset endpoint.");
+        appendSystem("Could not reach the reset endpoint.");
       }
       return;
     }
@@ -623,9 +623,6 @@ export default function ChatApp() {
                 Guide the learner and the assistant will respond with grounded context.
               </p>
             </div>
-            <span className={`status-badge ${isSending ? "typing" : "idle"}`}>
-              {isSending ? "Generating…" : "Idle"}
-            </span>
           </header>
 
           <section className="message-list">

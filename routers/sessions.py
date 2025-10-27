@@ -79,7 +79,7 @@ def new_session(topic: str = "general"):
     with get_connection() as conn:
         session_repository.ensure_table(conn)
         session_repository.rename_session(conn, session_id, topic, timestamp)
-    return {"session_id": session_id, "message": f"🆕 New session started for topic '{topic}'."}
+    return {"session_id": session_id, "message": f"New session started for topic '{topic}'."}
 
 
 @router.post("/topic")
@@ -101,7 +101,7 @@ def set_topic(
     with get_connection() as conn:
         session_repository.ensure_table(conn)
         session_repository.rename_session(conn, session_ref, topic_text, datetime.utcnow().isoformat())
-    return {"message": f"✅ Topic set to '{topic_text}'.", "session_id": session_ref}
+    return {"message": f"Topic set to '{topic_text}'.", "session_id": session_ref}
 
 
 @router.get("/summary")

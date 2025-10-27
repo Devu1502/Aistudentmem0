@@ -32,30 +32,33 @@ class ChatService:
             context = self.context_builder.build(conn, prompt, active_session, teach_on)
 
         if teach_on:
-            print("🧠 Teach Mode active — skipping chat history aggregation.")
+            print("Teach Mode active - skipping chat history aggregation.")
         else:
-            print(f"🧠 Loaded {len(context.history_rows)} previous messages for context.")
+            print(f"Loaded {len(context.history_rows)} previous messages for context.")
             if context.memory_hits:
-                print(f"📚 Retrieved {len(context.memory_hits)} related memories from vector store.")
+                print(f"Retrieved {len(context.memory_hits)} related memories from vector store.")
             else:
-                print("📚 Retrieved 0 related memories from vector store.")
+                print("Retrieved 0 related memories from vector store.")
             if context.document_hits:
-                print(f"📑 Document hits: {len(context.document_hits)}")
-                print("🧾 Appending document context:")
+                print(f"Document hits: {len(context.document_hits)}")
+                print("Appending document context:")
                 for preview in context.document_hits[:3]:
                     trimmed = preview.replace("\n", " ")
-                    print(f"    └ {trimmed[:160]}{'…' if len(trimmed) > 160 else ''}")
+                    snippet = trimmed[:160]
+                    if len(trimmed) > 160:
+                        snippet += '...'
+                    print(f"    - {snippet}")
             else:
-                print("📑 Document hits: none")
+                print("Document hits: none")
 
         user_prompt = self._compose_prompt(active_session, teach_on, context.chat_context, prompt)
         preview_context = "" if teach_on else context.chat_context
-        print("🤖 Calling OpenAI Agent (async)...")
-        print(f"🧾 LLM context preview (first 1000 chars):\n{preview_context[:1000]}")
+        print("Calling OpenAI Agent (async)...")
+        print(f"LLM context preview (first 1000 chars):\n{preview_context[:1000]}")
 
         result = await Runner.run(chat_agent, user_prompt)
         raw_reply = getattr(result, "final_output", "") or ""
-        print(f"📝 Raw LLM reply: {raw_reply!r}")
+        print(f"Raw LLM reply: {raw_reply!r}")
 
         reply_text = self._prepare_reply(raw_reply, teach_on)
         reply_text, action_data = sanitize_reply(reply_text)
@@ -77,7 +80,7 @@ class ChatService:
             run_id=active_session,
             metadata={"type": "short_term"},
         )
-        print(f"🧠 Storing short-term memory snippet:\n{conversation_summary[:300]}")
+        print(f"Storing short-term memory snippet:\n{conversation_summary[:300]}")
 
         timestamp = datetime.utcnow().isoformat()
         with get_connection() as conn:
@@ -86,7 +89,7 @@ class ChatService:
             chat_repository.insert_message(conn, active_session, prompt, reply_text, timestamp)
             session_repository.update_session_timestamps(conn, active_session, timestamp)
 
-        print("💾 Chat record inserted successfully.")
+        print("Chat record inserted successfully.")
 
         return {
             "response": reply_text,
@@ -108,4 +111,4 @@ class ChatService:
         if teach_on:
             return " "
         reply = raw_reply.strip()
-        return reply if reply else "⚠️ Agent returned no output."
+        return reply if reply else "Agent returned no output."

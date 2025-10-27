@@ -23,4 +23,4 @@ with open("mem0_local_vectors.csv", "w", newline="") as f:
         vector_snippet = json.dumps([round(v, 4) for v in p.vector[:8]]) + "..."
         writer.writerow([p.id, text, metadata, vector_snippet])
 
-print("✅ Export complete → mem0_local_vectors.csv")
+print("Export complete -> mem0_local_vectors.csv")

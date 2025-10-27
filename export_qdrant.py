@@ -1,10 +1,10 @@
 from qdrant_client import QdrantClient
 import csv
 
-# ✅ Connect to local Qdrant instance
+# Connect to local Qdrant instance
 qdrant = QdrantClient(url="http://localhost:6333")
 
-# ✅ Scroll through all points in the mem0_local collection
+# Scroll through all points in the mem0_local collection
 points, _ = qdrant.scroll(
     collection_name="mem0_local",
     with_payload=True,
@@ -12,7 +12,7 @@ points, _ = qdrant.scroll(
     limit=1000
 )
 
-# ✅ Write everything to CSV
+# Write everything to CSV
 with open("qdrant_mem0_local.csv", "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow(["id", "text", "user_id", "agent_id", "run_id", "type", "created_at", "vector_preview"])
@@ -31,4 +31,4 @@ with open("qdrant_mem0_local.csv", "w", newline="", encoding="utf-8") as f:
             str(vector[:10])  # only first 10 dims for readability
         ])
 
-print("✅ Exported mem0_local to qdrant_mem0_local.csv successfully.")
+print("Exported mem0_local to qdrant_mem0_local.csv successfully.")

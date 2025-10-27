@@ -10,10 +10,10 @@ def transcribe_any_file(filepath: str):
     """Transcribe any supported file (PDF, PPTX, DOCX, XLSX, JPG, PNG, etc.) using MarkItDown."""
     path = Path(filepath)
     if not path.exists():
-        print(f"❌ File not found: {path}")
+        print(f"File not found: {path}")
         return
 
-    print(f"📂 Processing: {path.name}")
+    print(f"Processing: {path.name}")
 
     md = MarkItDown(enable_plugins=False)
 
@@ -22,9 +22,9 @@ def transcribe_any_file(filepath: str):
         output_md = path.with_suffix(".md")
         with open(output_md, "w", encoding="utf-8") as f:
             f.write(result.text_content)
-        print(f"✅ Transcribed → {output_md}")
+        print(f"Transcribed -> {output_md}")
     except Exception as e:
-        print(f"⚠️ Error processing {path.name}: {e}")
+        print(f"Error processing {path.name}: {e}")
 
 
 if __name__ == "__main__":

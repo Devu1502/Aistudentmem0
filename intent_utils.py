@@ -27,15 +27,15 @@ def handle_system_action(action: str, session_id: str, memory: LocalMemory):
 
     if key == "topic":
         update_topic(session_id, val or "general")
-        return f"✅ Topic switched to {val or 'general'}.", "topic"
+        return f"Topic switched to {val or 'general'}.", "topic"
 
     if key == "session":
         sid = start_session(val or "general")
-        return f"🆕 New session started ({sid})", "session"
+        return f"New session started ({sid})", "session"
 
     if key == "reset":
         memory.reset()
-        return "🧹 Memory store reset successfully.", "reset"
+        return "Memory store reset successfully.", "reset"
 
     return None, None
 

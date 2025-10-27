@@ -26,7 +26,7 @@ def add_memory(
         run_id=session,
         metadata={"type": memory_type},
     )
-    print("\n🧠 [DEBUG] Added memory:")
+    print("\n[DEBUG] Added memory:")
     print(result)
     return {"session_id": session, "added": result}
 
@@ -65,7 +65,7 @@ def get_all(
     results = raw.get("results") if isinstance(raw, dict) else raw
     if results is None:
         results = []
-    print("\n📜 [DEBUG] formatted results array:", results)
+    print("\n[DEBUG] formatted results array:", results)
     return {"memories": results}
 
 
@@ -129,11 +129,11 @@ def search_all(query: str = Query(...), user_id: str = "sree", memory_store: Loc
 def inspect_memory(user_id: str = "sree", memory_store: LocalMemory = Depends(get_memory_store)):
     short = memory_store.search(query="", user_id=user_id, filters={"type": "short_term"})
     long = memory_store.search(query="", user_id=user_id, filters={"type": "long_term"})
-    print("\n🧩 Short-term records:")
+    print("\nShort-term records:")
     for i, s in enumerate(short.get("results", [])):
         print(f"{i+1}. {s.get('memory')[:100]}")
 
-    print("\n📘 Long-term records:")
+    print("\nLong-term records:")
     for i, l in enumerate(long.get("results", [])):
         print(f"{i+1}. {l.get('memory')[:100]}")
 

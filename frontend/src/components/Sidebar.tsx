@@ -47,9 +47,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button className="ghost-button large" onClick={onNewChat}>
           + New Chat
         </button>
-        <button className="ghost-button" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? "Refreshing…" : "↻ Refresh"}
-        </button>
       </div>
 
       <div className="sidebar-section">
@@ -79,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     Save
                   </button>
                   <button type="button" className="mini-btn" onClick={onRenameCancel}>
-                    ✖
+                        X
                   </button>
                 </form>
               ) : (
@@ -102,14 +99,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       : ""}
                   </small>
                   <div className="session-actions">
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onStartRename(session.session_id, session.title || session.preview || "");
-                      }}
-                    >
-                      ✏️
-                    </button>
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onStartRename(session.session_id, session.title || session.preview || "");
+                          }}
+                        >
+                          Edit
+                        </button>
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
