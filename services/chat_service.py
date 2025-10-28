@@ -66,11 +66,7 @@ class ChatService:
         if action_data:
             sys_reply, _ = handle_system_action(action_data, active_session, self.memory_store)
             if sys_reply:
-                return {
-                    "response": sys_reply,
-                    "context_count": len(context.history_rows),
-                    "session_id": active_session,
-                }
+                reply_text = sys_reply
 
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply_text}"
         self.memory_store.add(
