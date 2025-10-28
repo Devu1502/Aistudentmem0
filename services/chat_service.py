@@ -22,7 +22,7 @@ class ChatService:
         self.document_store = document_store
         self.context_builder = ContextBuilder(memory_store, document_store)
 
-    async def handle_chat(self, prompt: str, session_id: Optional[str]) -> Dict[str, str | int | None]:
+    async def handle_chat(self, prompt: str, session_id: Optional[str]) -> Dict[str, str | int | bool | None]:
         active_session = session_id or generate_session_id()
         teach_on = is_teach_mode_on()
 
@@ -61,12 +61,14 @@ class ChatService:
         print(f"Raw LLM reply: {raw_reply!r}")
 
         reply_text = self._prepare_reply(raw_reply, teach_on)
+        silent = teach_on
         reply_text, action_data = sanitize_reply(reply_text)
 
         if action_data:
             sys_reply, _ = handle_system_action(action_data, active_session, self.memory_store)
             if sys_reply:
                 reply_text = sys_reply
+                silent = False
 
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply_text}"
         self.memory_store.add(
@@ -91,6 +93,7 @@ class ChatService:
             "response": reply_text,
             "context_count": len(context.history_rows),
             "session_id": active_session,
+            "silent": silent,
         }
 
     @staticmethod
@@ -105,6 +108,6 @@ class ChatService:
     @staticmethod
     def _prepare_reply(raw_reply: str, teach_on: bool) -> str:
         if teach_on:
-            return " "
+            return ""
         reply = raw_reply.strip()
         return reply if reply else "Agent returned no output."

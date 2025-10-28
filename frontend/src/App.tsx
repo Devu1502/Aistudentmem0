@@ -336,16 +336,15 @@ export default function ChatApp() {
       const data = await response.json();
       setSessionId(data.session_id ?? sessionId);
 
+      const silent = Boolean(data.silent);
       const rawResponse = typeof data.response === "string" ? data.response : "";
       const trimmedResponse = rawResponse.trim();
       const assistantReply =
-        trimmedResponse.length > 0
-          ? trimmedResponse
-          : teachMode
-          ? ""
-          : "I did not receive a response from the model.";
+        trimmedResponse.length > 0 ? trimmedResponse : "I did not receive a response from the model.";
 
-      setMessages((prev) => [...prev, createMessage("student", assistantReply)]);
+      if (!silent) {
+        setMessages((prev) => [...prev, createMessage("student", assistantReply)]);
+      }
       fetchSessions();
     } catch (error) {
       console.error(error);
