@@ -21,6 +21,8 @@ type CommandDefinition = {
 };
 
 const API_BASE = "http://127.0.0.1:8000";
+const STT_URL = `${API_BASE}/stt`;
+const TTS_URL = `${API_BASE}/tts`;
 
 const COMMANDS: CommandDefinition[] = [
   {
@@ -95,9 +97,14 @@ export default function ChatApp() {
   const [isUploading, setIsUploading] = useState(false);
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const initialisedRef = useRef(false);
 
   const pushSystemMessage = useCallback((text: string) => {
@@ -160,6 +167,18 @@ export default function ChatApp() {
       cmd.name.toLowerCase().includes(token) || cmd.usage.toLowerCase().includes(token)
     );
   }, [commandQuery, showSuggestions]);
+
+  const latestAssistantMessage = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "student") {
+        return message;
+      }
+    }
+    return null;
+  }, [messages]);
+
+  const hasAssistantReply = Boolean(latestAssistantMessage);
 
   const closeCommandPalette = () => {
     setShowSuggestions(false);
@@ -270,6 +289,137 @@ export default function ChatApp() {
     setEditingSession(null);
     setNewTitle("");
   }, []);
+
+  const startRecording = async () => {
+    if (isRecording || isTranscribing) {
+      return;
+    }
+
+    try {
+      setAudioError(null);
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Microphone not supported in this browser");
+      }
+      if (typeof MediaRecorder === "undefined") {
+        throw new Error("MediaRecorder API unavailable");
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        setIsTranscribing(true);
+        recorderRef.current = null;
+        recorder.stream.getTracks().forEach((track) => track.stop());
+
+        const audioBlob = new Blob(chunks, { type: "audio/webm" });
+        if (audioBlob.size === 0) {
+          setIsTranscribing(false);
+          setAudioError("No audio captured");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", audioBlob, "speech.webm");
+
+        try {
+          const response = await fetch(STT_URL, { method: "POST", body: formData });
+          if (!response.ok) {
+            throw new Error(`Transcription failed (${response.status})`);
+          }
+          const data = (await response.json()) as { text?: string };
+          setInput(data.text ?? "");
+          setAudioError(null);
+        } catch (err) {
+          setAudioError(err instanceof Error ? err.message : "Unable to transcribe audio");
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      recorderRef.current = recorder;
+      setIsRecording(true);
+    } catch (err) {
+      setIsRecording(false);
+      setAudioError(err instanceof Error ? err.message : "Microphone permission denied");
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = recorderRef.current;
+    if (!recorder) {
+      return;
+    }
+    recorder.stop();
+    setIsRecording(false);
+    recorderRef.current = null;
+  };
+
+  const playLatestReply = async () => {
+    if (isPlaying || isSending || isTranscribing) {
+      return;
+    }
+    if (!latestAssistantMessage) {
+      setAudioError("No assistant reply available");
+      return;
+    }
+
+    setAudioError(null);
+    setIsPlaying(true);
+
+    let audioUrl: string | null = null;
+    let audio: HTMLAudioElement | null = null;
+
+    try {
+      const speechResponse = await fetch(TTS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: latestAssistantMessage.text }),
+      });
+
+      if (!speechResponse.ok) {
+        throw new Error(`Speech playback failed (${speechResponse.status})`);
+      }
+
+      const audioBlob = await speechResponse.blob();
+      audioUrl = URL.createObjectURL(audioBlob);
+      audio = new Audio(audioUrl);
+
+      audio.onended = () => {
+        setIsPlaying(false);
+        if (audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+        }
+      };
+      audio.onerror = () => {
+        setIsPlaying(false);
+        if (audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+        }
+        setAudioError("Unable to play audio");
+      };
+
+      await audio.play();
+    } catch (err) {
+      setIsPlaying(false);
+      if (audio) {
+        audio.pause();
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      setAudioError(err instanceof Error ? err.message : "Playback error");
+    }
+  };
 
   const handleInputChange = (value: string) => {
     setInput(value);
@@ -717,6 +867,25 @@ export default function ChatApp() {
               <button
                 type="button"
                 className="secondary-button"
+                onClick={playLatestReply}
+                disabled={isPlaying || isSending || isTranscribing || !hasAssistantReply}
+                title="Play latest assistant reply"
+              >
+                🔊
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isTranscribing}
+                title={isRecording ? "Stop recording" : "Start voice input"}
+                style={isRecording ? { backgroundColor: "#f87171", color: "#fff" } : undefined}
+              >
+                {isRecording ? "⏹️" : "🎤"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading || isSending}
               >
@@ -726,6 +895,9 @@ export default function ChatApp() {
                 {isSending ? "Sending…" : "Send"}
               </button>
             </div>
+            {audioError && (
+              <p style={{ color: "#d14343", marginTop: "0.5rem" }}>{audioError}</p>
+            )}
           </form>
         </main>
       </div>

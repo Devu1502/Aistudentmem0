@@ -1,1 +1,1 @@
-from . import chat, documents, memory, sessions, system  # noqa: F401
+from . import audio, chat, documents, memory, sessions, system  # noqa: F401
