@@ -28,7 +28,7 @@ with open("qdrant_mem0_local.csv", "w", newline="", encoding="utf-8") as f:
             payload.get("run_id", ""),
             payload.get("type", ""),
             payload.get("created_at", ""),
-            str(vector[:10])  # only first 10 dims for readability
+            str(vector[:10])  # only first 10 for readability
         ])
 
 print("Exported mem0_local to qdrant_mem0_local.csv successfully.")

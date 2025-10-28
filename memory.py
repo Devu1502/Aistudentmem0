@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import ollama
-except ImportError as exc:  # pragma: no cover - surface clear error at import time
+except ImportError as exc:  
     raise RuntimeError(
         "The 'ollama' package is required for LocalOllamaEmbedder. Install it with `pip install ollama`."
     ) from exc
@@ -59,7 +59,7 @@ class LocalOllamaEmbedder:
 
         try:
             response = self._client.embeddings(model=self.model, prompt=text)
-        except Exception as err:  # pragma: no cover - network/runtime errors
+        except Exception as err:
             logger.error("Ollama embedding request failed: %s", err)
             return np.zeros(768, dtype=np.float32)
 
@@ -96,9 +96,6 @@ class LocalMemory:
         self._ensure_collection()
         logger.info("LocalMemory ready (collection=%s, dimension=%s)", self.collection_name, self.dimension)
 
-    # ------------------------------------------------------------------ #
-    # Collection helpers
-    # ------------------------------------------------------------------ #
     def _ensure_collection(self) -> None:
         """Create the collection if missing, or recreate when dimension mismatch is detected."""
         try:
@@ -122,9 +119,6 @@ class LocalMemory:
             vectors_config=VectorParams(size=self.dimension, distance=Distance.COSINE),
         )
 
-    # ------------------------------------------------------------------ #
-    # Metadata & filters
-    # ------------------------------------------------------------------ #
     @staticmethod
     def _merge_metadata(
         *,
@@ -185,9 +179,6 @@ class LocalMemory:
         tz = pytz.timezone(self.time_zone)
         return datetime.now(tz).isoformat()
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
     def add(
         self,
         text: str,

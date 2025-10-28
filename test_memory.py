@@ -4,13 +4,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 try:
     import numpy as np
-except ImportError:  # pragma: no cover - helpful message when numpy missing
+except ImportError:  
     np = None
 try:
     from qdrant_client.models import FieldCondition, Filter, MatchValue, PointIdsList, PointStruct
 
     qdrant_available = True
-except ImportError:  # pragma: no cover - skip tests gracefully if dependency missing
+except ImportError:
     qdrant_available = False
 
 dependencies_ready = np is not None and qdrant_available
@@ -18,14 +18,13 @@ dependencies_ready = np is not None and qdrant_available
 
 if dependencies_ready:
     from memory import LocalMemory
-else:  # pragma: no cover - ensure symbol exists for type checkers
+else: 
     LocalMemory = None
 
 
 if dependencies_ready:
 
     class DummyEmbedder:
-        """Deterministic embedder that produces fixed-size vectors without calling Ollama."""
 
         def __init__(self, dimension: int):
             self.dimension = dimension
@@ -37,12 +36,10 @@ if dependencies_ready:
 
 
     class FakeQdrantClient:
-        """Minimal in-memory stand-in for QdrantClient used by LocalMemory tests."""
 
         def __init__(self):
             self._collections: Dict[str, Dict[str, Any]] = {}
 
-        # Collection management -------------------------------------------------
         def get_collection(self, collection_name: str):
             if collection_name not in self._collections:
                 raise ValueError("Collection does not exist.")
@@ -62,7 +59,6 @@ if dependencies_ready:
         def delete_collection(self, collection_name: str) -> None:
             self._collections.pop(collection_name, None)
 
-        # Point helpers ---------------------------------------------------------
         def upsert(self, collection_name: str, points: List[PointStruct], **_) -> None:
             collection = self._collections[collection_name]["__points"]
             for point in points:
@@ -142,7 +138,6 @@ if dependencies_ready:
             else:
                 collection.clear()
 
-        # Utility helpers -------------------------------------------------------
         @staticmethod
         def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
             denom = float(np.linalg.norm(a) * np.linalg.norm(b))
