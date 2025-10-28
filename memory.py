@@ -2,7 +2,6 @@
 Local memory utilities that mirror the high-level mem0 API but run fully offline.
 
 This module provides:
-    - LocalOllamaEmbedder: lightweight wrapper around Ollama embeddings.
     - LocalMemory: Qdrant-backed memory store implementing add/search/get_all/update/delete/reset.
 
 The interface intentionally stays close to mem0.memory.main.Memory so existing FastAPI
