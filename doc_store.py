@@ -26,6 +26,8 @@ from qdrant_client.models import (
 
 from memory import LocalOllamaEmbedder
 
+from config.settings import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,7 +77,11 @@ class DocumentStore:
     ) -> None:
         self.collection_name = collection_name
         self.dimension = dimension
-        self._client = qdrant_client or QdrantClient(url="http://localhost:6333")
+        self._client = qdrant_client or QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+            prefer_grpc=False,
+        )
         self._embedder = embedder or LocalOllamaEmbedder()
         self._distance = distance
         self._ensure_collection()
@@ -95,16 +101,39 @@ class DocumentStore:
                     current_dim,
                     self.collection_name,
                 )
-                self._client.delete_collection(self.collection_name)
+                try:
+                    self._client.delete_collection(self.collection_name)
+                except Exception as exc:
+                    if self._is_forbidden_error(exc):
+                        logger.warning("DocumentStore: cannot delete collection (forbidden): %s", exc)
+                        return
+                    raise
                 self._create_collection()
-        except Exception:
+        except Exception as exc:
+            if self._is_forbidden_error(exc):
+                logger.warning(
+                    "DocumentStore: skipping ensure for %s; permission denied: %s",
+                    self.collection_name,
+                    exc,
+                )
+                return
             self._create_collection()
 
     def _create_collection(self) -> None:
-        self._client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(size=self.dimension, distance=self._distance),
-        )
+        try:
+            self._client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=self.dimension, distance=self._distance),
+            )
+        except Exception as exc:
+            if self._is_forbidden_error(exc):
+                logger.warning(
+                    "DocumentStore: skipping create for %s; permission denied: %s",
+                    self.collection_name,
+                    exc,
+                )
+                return
+            raise
 
     def _encode_chunks(
         self,
@@ -149,6 +178,16 @@ class DocumentStore:
                 conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
 
         return Filter(must=conditions) if conditions else None
+
+    @staticmethod
+    def _is_forbidden_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "forbidden" in message or "403" in message
+
+    @staticmethod
+    def _needs_manual_filter(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "index required" in message or "payload index" in message
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -196,14 +235,13 @@ class DocumentStore:
 
         vector = self._embedder.embed(query)
         query_filter = self._build_filter(filters)
-        hits = self._client.query_points(
-            collection_name=self.collection_name,
-            query=vector.tolist(),
-            with_payload=True,
+        hits = self._run_similarity_search(
+            embedding=vector.tolist(),
             limit=limit,
             score_threshold=score_threshold,
             query_filter=query_filter,
-        ).points
+            combined_filters=filters or {},
+        )
 
         formatted = [
             {
@@ -215,6 +253,98 @@ class DocumentStore:
             for point in hits
         ]
         return {"results": formatted}
+
+    def _run_similarity_search(
+        self,
+        *,
+        embedding: List[float],
+        limit: int,
+        score_threshold: Optional[float],
+        query_filter: Optional[Filter],
+        combined_filters: Dict[str, Any],
+    ) -> List:
+        try:
+            response = self._client.query_points(
+                collection_name=self.collection_name,
+                query=embedding,
+                with_payload=True,
+                limit=limit,
+                score_threshold=score_threshold,
+                query_filter=query_filter,
+            )
+            points = response.points if hasattr(response, "points") else response
+            return list(points)
+        except Exception as exc:
+            if self._is_forbidden_error(exc):
+                try:
+                    response = self._client.search(
+                        collection_name=self.collection_name,
+                        query_vector=embedding,
+                        with_payload=True,
+                        limit=limit,
+                        score_threshold=score_threshold,
+                        query_filter=query_filter,
+                    )
+                    points = response if isinstance(response, list) else getattr(response, "points", response)
+                    return list(points)
+                except Exception as search_exc:
+                    if self._needs_manual_filter(search_exc):
+                        return self._manual_filter_search(
+                            embedding=embedding,
+                            limit=limit,
+                            score_threshold=score_threshold,
+                            combined_filters=combined_filters,
+                        )
+                    raise
+            if self._needs_manual_filter(exc):
+                return self._manual_filter_search(
+                    embedding=embedding,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    combined_filters=combined_filters,
+                )
+            raise
+
+    def _manual_filter_search(
+        self,
+        *,
+        embedding: List[float],
+        limit: int,
+        score_threshold: Optional[float],
+        combined_filters: Dict[str, Any],
+    ) -> List:
+        fetch_limit = max(limit * 5, limit)
+        fetch_limit = min(fetch_limit, 100)
+
+        response = self._client.search(
+            collection_name=self.collection_name,
+            query_vector=embedding,
+            with_payload=True,
+            limit=fetch_limit,
+            score_threshold=score_threshold,
+        )
+
+        matches: List = []
+        points = response if isinstance(response, list) else getattr(response, "points", response)
+        for point in points:
+            payload = point.payload or {}
+            if self._payload_matches(payload, combined_filters):
+                matches.append(point)
+                if len(matches) >= limit:
+                    break
+        return matches
+
+    @staticmethod
+    def _payload_matches(payload: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+        if not filters:
+            return True
+        for key, value in filters.items():
+            expected = value.get("eq") if isinstance(value, dict) else value
+            if expected is None:
+                continue
+            if payload.get(key) != expected:
+                return False
+        return True
 
 
 __all__ = ["DocumentStore"]

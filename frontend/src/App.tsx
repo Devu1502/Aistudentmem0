@@ -842,16 +842,6 @@ export default function ChatApp() {
                 }}
                 rows={Math.min(6, input.split("\n").length + 1)}
               />
-              <button
-                type="button"
-                className="secondary-button chat-mic-button"
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={isTranscribing}
-                title={isRecording ? "Stop recording" : "Start voice input"}
-                style={isRecording ? { backgroundColor: "#f87171", color: "#fff" } : undefined}
-              >
-                {isRecording ? "⏹️" : "🎤"}
-              </button>
 
               {/* {showSuggestions && filteredCommands.length > 0 && (
                 <div className="command-suggestions">
@@ -877,19 +867,29 @@ export default function ChatApp() {
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || isSending}
-              >
-                {isUploading ? "Uploading…" : "Upload Docs"}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
                 onClick={playLatestReply}
                 disabled={isPlaying || isSending || isTranscribing || !hasAssistantReply}
                 title="Play latest assistant reply"
               >
                 🔊
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isTranscribing}
+                title={isRecording ? "Stop recording" : "Start voice input"}
+                style={isRecording ? { backgroundColor: "#f87171", color: "#fff" } : undefined}
+              >
+                {isRecording ? "⏹️" : "🎤"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || isSending}
+              >
+                {isUploading ? "Uploading…" : "Upload Docs"}
               </button>
               <button type="submit" className="primary-button" disabled={isSending}>
                 {isSending ? "Sending…" : "Send"}

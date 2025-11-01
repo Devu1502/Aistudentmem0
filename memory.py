@@ -16,6 +16,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from config.settings import settings
+
 import numpy as np
 import pytz
 from qdrant_client import QdrantClient
@@ -42,9 +44,9 @@ except ImportError as exc:
 class LocalOllamaEmbedder:
     """Direct local embedding via Ollama without depending on mem0 factories."""
 
-    def __init__(self, model: str = "nomic-embed-text:latest", base_url: str = "http://localhost:11434") -> None:
+    def __init__(self, model: str = "nomic-embed-text:latest", base_url: Optional[str] = None) -> None:
         self.model = model
-        self.base_url = base_url
+        self.base_url = base_url or settings.ollama_url
         self._client = ollama.Client(host=self.base_url)
 
     def embed(self, text: str) -> np.ndarray:
@@ -72,12 +74,6 @@ class LocalOllamaEmbedder:
 
 
 class LocalMemory:
-    """
-    Minimal offline memory manager using Qdrant + Ollama embeddings.
-
-    Method signatures align with mem0's Memory class where the FastAPI layer relies on them.
-    """
-
     def __init__(
         self,
         qdrant_client: Optional[QdrantClient] = None,
@@ -90,7 +86,11 @@ class LocalMemory:
         self.dimension = dimension
         self.time_zone = time_zone
 
-        self.vector_store = qdrant_client or QdrantClient(url="http://localhost:6333")
+        self.vector_store = qdrant_client or QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+            prefer_grpc=False,
+        )
         self.embedding_model = embedder or LocalOllamaEmbedder()
 
         self._ensure_collection()
@@ -108,16 +108,39 @@ class LocalMemory:
                     self.dimension,
                     current_dim,
                 )
-                self.vector_store.delete_collection(self.collection_name)
+                try:
+                    self.vector_store.delete_collection(self.collection_name)
+                except Exception as exc:
+                    if self._is_forbidden_error(exc):
+                        logger.warning("Skipping collection deletion (forbidden): %s", exc)
+                        return
+                    raise
                 self._create_collection()
-        except Exception:
+        except Exception as exc:
+            if self._is_forbidden_error(exc):
+                logger.warning(
+                    "Skipping collection ensure for %s; permission denied: %s",
+                    self.collection_name,
+                    exc,
+                )
+                return
             self._create_collection()
 
     def _create_collection(self) -> None:
-        self.vector_store.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(size=self.dimension, distance=Distance.COSINE),
-        )
+        try:
+            self.vector_store.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=self.dimension, distance=Distance.COSINE),
+            )
+        except Exception as exc:
+            if self._is_forbidden_error(exc):
+                logger.warning(
+                    "Skipping collection creation for %s; permission denied: %s",
+                    self.collection_name,
+                    exc,
+                )
+                return
+            raise
 
     @staticmethod
     def _merge_metadata(
@@ -137,6 +160,16 @@ class LocalMemory:
         if run_id:
             merged["run_id"] = run_id
         return merged
+
+    @staticmethod
+    def _is_forbidden_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "forbidden" in message or "403" in message
+
+    @staticmethod
+    def _needs_manual_filter(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "index required" in message or "payload index" in message
 
     @staticmethod
     def _build_filters(
@@ -237,26 +270,117 @@ class LocalMemory:
         )
         qdrant_filter = self._to_qdrant_filter(combined_filters)
 
-        results = self.vector_store.query_points(
-            collection_name=self.collection_name,
-            query=embedding.tolist(),
-            with_payload=True,
+        points = self._run_similarity_search(
+            embedding=embedding.tolist(),
             limit=limit,
             score_threshold=score_threshold,
-            query_filter=qdrant_filter,
-        ).points
+            qdrant_filter=qdrant_filter,
+            combined_filters=combined_filters,
+        )
 
         formatted = [
             {
-                "id": point.id,
-                "score": point.score,
-                "memory": point.payload.get("text", ""),
-                "metadata": {k: v for k, v in point.payload.items() if k not in {"text"}},
+                "id": hit.id,
+                "score": hit.score,
+                "memory": (hit.payload or {}).get("text", ""),
+                "metadata": {k: v for k, v in (hit.payload or {}).items() if k not in {"text"}},
             }
-            for point in results
+            for hit in points
         ]
 
         return {"results": formatted}
+
+    def _run_similarity_search(
+        self,
+        *,
+        embedding: List[float],
+        limit: int,
+        score_threshold: Optional[float],
+        qdrant_filter: Optional[Filter],
+        combined_filters: Dict[str, Any],
+    ) -> List:
+        try:
+            response = self.vector_store.query_points(
+                collection_name=self.collection_name,
+                query=embedding,
+                with_payload=True,
+                limit=limit,
+                score_threshold=score_threshold,
+                query_filter=qdrant_filter,
+            )
+            points = response.points if hasattr(response, "points") else response
+            return list(points)
+        except Exception as exc:
+            if self._is_forbidden_error(exc):
+                try:
+                    response = self.vector_store.search(
+                        collection_name=self.collection_name,
+                        query_vector=embedding,
+                        with_payload=True,
+                        limit=limit,
+                        score_threshold=score_threshold,
+                        query_filter=qdrant_filter,
+                    )
+                    points = response if isinstance(response, list) else getattr(response, "points", response)
+                    return list(points)
+                except Exception as search_exc:
+                    if self._needs_manual_filter(search_exc):
+                        return self._manual_filter_search(
+                            embedding=embedding,
+                            limit=limit,
+                            score_threshold=score_threshold,
+                            combined_filters=combined_filters,
+                        )
+                    raise
+            if self._needs_manual_filter(exc):
+                return self._manual_filter_search(
+                    embedding=embedding,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    combined_filters=combined_filters,
+                )
+            raise
+
+    def _manual_filter_search(
+        self,
+        *,
+        embedding: List[float],
+        limit: int,
+        score_threshold: Optional[float],
+        combined_filters: Dict[str, Any],
+    ) -> List:
+        fetch_limit = max(limit * 5, limit)
+        fetch_limit = min(fetch_limit, 100)
+
+        response = self.vector_store.search(
+            collection_name=self.collection_name,
+            query_vector=embedding,
+            with_payload=True,
+            limit=fetch_limit,
+            score_threshold=score_threshold,
+        )
+
+        matched: List = []
+        points = response if isinstance(response, list) else getattr(response, "points", response)
+        for point in points:
+            payload = point.payload or {}
+            if self._payload_matches(payload, combined_filters):
+                matched.append(point)
+                if len(matched) >= limit:
+                    break
+        return matched
+
+    @staticmethod
+    def _payload_matches(payload: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+        if not filters:
+            return True
+        for key, value in filters.items():
+            expected = value.get("eq") if isinstance(value, dict) else value
+            if expected is None:
+                continue
+            if payload.get(key) != expected:
+                return False
+        return True
 
     def get_all(
         self,

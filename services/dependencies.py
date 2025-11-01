@@ -11,7 +11,12 @@ from services.document_service import DocumentIngestionService
 
 @lru_cache
 def get_qdrant_client() -> QdrantClient:
-    return QdrantClient(url=settings.qdrant_url)
+    return QdrantClient(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key,
+        prefer_grpc=False,
+        timeout=10.0,
+    )
 
 
 @lru_cache
