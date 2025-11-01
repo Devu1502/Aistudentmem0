@@ -8,6 +8,10 @@ from routers import audio, chat, documents, memory as memory_router, sessions, s
 
 app = FastAPI(title="Mem0 Local Memory System")
 
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
