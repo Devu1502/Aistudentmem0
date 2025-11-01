@@ -20,7 +20,10 @@ type CommandDefinition = {
   description: string;
 };
 
-const API_BASE = "http://127.0.0.1:8000";
+// const API_BASE = "http://127.0.0.1:8000";
+// const API_BASE = "https://7ef565d94d00.ngrok-free.app";
+const API_BASE = "http://10.0.0.146:8098";
+
 const STT_URL = `${API_BASE}/stt`;
 const TTS_URL = `${API_BASE}/tts`;
 

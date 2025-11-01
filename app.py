@@ -8,9 +8,6 @@ from routers import audio, chat, documents, memory as memory_router, sessions, s
 
 app = FastAPI(title="Mem0 Local Memory System")
 
-from fastapi.staticfiles import StaticFiles
-app.mount("/", StaticFiles(directory="frontend/build", html=True), name="static")
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +16,8 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://f717d785d181.ngrok-free.app",  # 👈 add this line
+
     ],
     allow_credentials=True,
     allow_methods=["*"],
