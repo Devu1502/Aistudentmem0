@@ -9,10 +9,9 @@ without touching the FastAPI routes.
 from __future__ import annotations
 
 import logging
-import math
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -24,7 +23,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
-from memory import LocalOllamaEmbedder
+from memory import OpenAIEmbedder
 
 from config.settings import settings
 
@@ -70,9 +69,9 @@ class DocumentStore:
     def __init__(
         self,
         qdrant_client: Optional[QdrantClient] = None,
-        embedder: Optional[LocalOllamaEmbedder] = None,
+        embedder: Optional[OpenAIEmbedder] = None,
         collection_name: str = "mem0_documents",
-        dimension: int = 768,
+        dimension: int = settings.vectors.embedding_dim,
         distance: Distance = Distance.COSINE,
     ) -> None:
         self.collection_name = collection_name
@@ -82,7 +81,7 @@ class DocumentStore:
             api_key=settings.qdrant_api_key,
             prefer_grpc=False,
         )
-        self._embedder = embedder or LocalOllamaEmbedder()
+        self._embedder = embedder or OpenAIEmbedder(model=settings.models.embed)
         self._distance = distance
         self._ensure_collection()
         logger.info("DocumentStore ready (collection=%s)", self.collection_name)

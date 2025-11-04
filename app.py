@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import audio, chat, documents, memory as memory_router, sessions, system
+from routers import audio, chat, documents, memory as memory_router, search, sessions, system
+import routers.search  # <--- force ensure route registration
 
 
 app = FastAPI(title="Mem0 Local Memory System")
@@ -28,6 +29,7 @@ app.include_router(system.router)
 app.include_router(audio.router)
 app.include_router(chat.router)
 app.include_router(documents.router)
+app.include_router(search.router)
 app.include_router(sessions.router)
 app.include_router(memory_router.router)
 

@@ -4,7 +4,7 @@ from qdrant_client import QdrantClient
 
 from config.settings import settings
 from doc_store import DocumentStore
-from memory import LocalMemory, LocalOllamaEmbedder
+from memory import LocalMemory, OpenAIEmbedder
 from services.chat_service import ChatService
 from services.document_service import DocumentIngestionService
 
@@ -20,8 +20,8 @@ def get_qdrant_client() -> QdrantClient:
 
 
 @lru_cache
-def get_embedder() -> LocalOllamaEmbedder:
-    return LocalOllamaEmbedder(model=settings.models.embed, base_url=settings.ollama_url)
+def get_embedder() -> OpenAIEmbedder:
+    return OpenAIEmbedder(model=settings.models.embed)
 
 
 @lru_cache

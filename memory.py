@@ -16,10 +16,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from config.settings import settings
-
 import numpy as np
 import pytz
+from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -33,42 +32,45 @@ from qdrant_client.models import (
 
 logger = logging.getLogger(__name__)
 
-try:
-    import ollama
-except ImportError as exc:  
-    raise RuntimeError(
-        "The 'ollama' package is required for LocalOllamaEmbedder. Install it with `pip install ollama`."
-    ) from exc
+from config.settings import settings
 
 
-class LocalOllamaEmbedder:
-    """Direct local embedding via Ollama without depending on mem0 factories."""
+class OpenAIEmbedder:
+    """Embedding backend powered by OpenAI's text-embedding models."""
 
-    def __init__(self, model: str = "nomic-embed-text:latest", base_url: Optional[str] = None) -> None:
-        self.model = model
-        self.base_url = base_url or settings.ollama_url
-        self._client = ollama.Client(host=self.base_url)
+    def __init__(self, model: str = "text-embedding-3-small", client: Optional[OpenAI] = None) -> None:
+        self.model = model or settings.models.embed
+        self._client = client or OpenAI()
+        self._dimension = settings.vectors.embedding_dim
 
     def embed(self, text: str) -> np.ndarray:
         """
         Generate an embedding vector for text.
 
-        Returns a zero vector when Ollama cannot produce an embedding to keep the pipeline robust.
+        Returns a zero vector when the provider cannot produce an embedding to keep the pipeline robust.
         """
         if not text or not text.strip():
             logger.warning("Empty text passed to embed(); returning zero vector.")
-            return np.zeros(768, dtype=np.float32)
+            return np.zeros(self._dimension, dtype=np.float32)
 
         try:
-            response = self._client.embeddings(model=self.model, prompt=text)
+            response = self._client.embeddings.create(
+                model=self.model,
+                input=text,
+                dimensions=self._dimension,
+            )
+            vector = response.data[0].embedding if response.data else None
         except Exception as err:
-            logger.error("Ollama embedding request failed: %s", err)
-            return np.zeros(768, dtype=np.float32)
+            logger.error("OpenAI embedding request failed: %s", err)
+            return np.zeros(self._dimension, dtype=np.float32)
 
-        vector = response.get("embedding")
         if not vector:
-            logger.error("Ollama returned no embedding data. Falling back to zero vector.")
-            return np.zeros(768, dtype=np.float32)
+            logger.error("OpenAI returned no embedding data. Falling back to zero vector.")
+            return np.zeros(self._dimension, dtype=np.float32)
+
+        if self._dimension != len(vector):
+            logger.info("Updating embedding dimension from %s to %s", self._dimension, len(vector))
+            self._dimension = len(vector)
 
         return np.array(vector, dtype=np.float32)
 
@@ -77,9 +79,9 @@ class LocalMemory:
     def __init__(
         self,
         qdrant_client: Optional[QdrantClient] = None,
-        embedder: Optional[LocalOllamaEmbedder] = None,
+        embedder: Optional[OpenAIEmbedder] = None,
         collection_name: str = "mem0_local",
-        dimension: int = 768,
+        dimension: int = settings.vectors.embedding_dim,
         time_zone: str = "US/Pacific",
     ) -> None:
         self.collection_name = collection_name
@@ -91,7 +93,7 @@ class LocalMemory:
             api_key=settings.qdrant_api_key,
             prefer_grpc=False,
         )
-        self.embedding_model = embedder or LocalOllamaEmbedder()
+        self.embedding_model = embedder or OpenAIEmbedder(model=settings.models.embed)
 
         self._ensure_collection()
         logger.info("LocalMemory ready (collection=%s, dimension=%s)", self.collection_name, self.dimension)
@@ -484,4 +486,4 @@ class LocalMemory:
         return {"message": "Memory store reset successfully!"}
 
 
-__all__ = ["LocalOllamaEmbedder", "LocalMemory"]
+__all__ = ["OpenAIEmbedder", "LocalMemory"]

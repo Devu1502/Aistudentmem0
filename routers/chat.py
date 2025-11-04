@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from intent_utils import detect_dev_command
 from memory import LocalMemory

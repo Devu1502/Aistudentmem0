@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-import ollama
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
+from openai import OpenAI
 
 from config.settings import settings
 from db.sqlite import get_connection
@@ -15,6 +15,7 @@ from utils.ids import generate_session_id
 
 
 router = APIRouter()
+openai_client = OpenAI()
 
 
 @router.get("/sidebar_sessions")
@@ -125,11 +126,18 @@ def summarize_session(
         "Focus on what the teacher taught and how the student responded.\n\n"
         f"{joined_transcript}"
     )
-    summary_response = ollama.chat(
+    response = openai_client.responses.create(
         model=settings.models.summary,
-        messages=[{"role": "user", "content": prompt}],
+        input=[
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
     )
-    summary_text = summary_response["message"]["content"].strip()
+    summary_text = (response.output_text or "").strip()
+    if not summary_text:
+        summary_text = "Summary unavailable."
 
     memory_store.add(
         summary_text,

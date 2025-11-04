@@ -20,10 +20,10 @@ type CommandDefinition = {
   description: string;
 };
 
-// const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:8010";
 // const API_BASE = "https://7ef565d94d00.ngrok-free.app";
-const API_BASE = "http://10.0.0.146:8098";
-
+// const API_BASE = "http://10.0.0.146:8098";
+// const API_BASE = "https://f717d785d181.ngrok-free.app";
 const STT_URL = `${API_BASE}/stt`;
 const TTS_URL = `${API_BASE}/tts`;
 
@@ -67,6 +67,16 @@ const COMMANDS: CommandDefinition[] = [
     name: "search",
     usage: "/search <keywords>",
     description: "Legacy search on the active filters",
+  },
+  {
+    name: "vectorsearch",
+    usage: "/vectorsearch <query>",
+    description: "Combined semantic search across chat memory and documents",
+  },
+  {
+    name: "documentvectorsearch",
+    usage: "/documentvectorsearch <query>",
+    description: "Semantic search only within uploaded documents",
   },
 ];
 
@@ -671,6 +681,80 @@ export default function ChatApp() {
       } catch (error) {
         console.error(error);
         appendSystem("Could not reach the search API.");
+      }
+      return;
+    }
+
+    if (normalized === "vectorsearch") {
+      const query = args.join(" ").trim();
+      if (!query) {
+        appendSystem("Usage: /vectorsearch <query>");
+        return;
+      }
+      try {
+        const url = new URL(`${API_BASE}/vectorsearch`);
+        url.searchParams.set("query", query);
+        const res = await fetch(url.toString());
+        if (!res.ok) {
+          const text = await res.text();
+          appendSystem(`Vector search failed: ${text || res.statusText}`);
+          return;
+        }
+        const data = await res.json();
+        const results = Array.isArray(data.combined_results) ? data.combined_results : [];
+        if (results.length === 0) {
+          appendSystem(`No vector hits for “${query}”.`);
+          return;
+        }
+        const formatted = results
+          .map(
+            (item: any, index: number) =>
+              `${index + 1}. [${item?.source ?? "unknown"}] ${item?.memory?.slice?.(0, 200) ?? "—"}... (score: ${
+                item?.score?.toFixed?.(3) ?? "?"
+              })`
+          )
+          .join("\n\n");
+        appendSystem(`Vector search results for “${query}”:\n\n${formatted}`);
+      } catch (error) {
+        console.error(error);
+        appendSystem("Could not reach the vectorsearch endpoint.");
+      }
+      return;
+    }
+
+    if (normalized === "documentvectorsearch") {
+      const query = args.join(" ").trim();
+      if (!query) {
+        appendSystem("Usage: /documentvectorsearch <query>");
+        return;
+      }
+      try {
+        const url = new URL(`${API_BASE}/documentvectorsearch`);
+        url.searchParams.set("query", query);
+        const res = await fetch(url.toString());
+        if (!res.ok) {
+          const text = await res.text();
+          appendSystem(`Document vector search failed: ${text || res.statusText}`);
+          return;
+        }
+        const data = await res.json();
+        const results = Array.isArray(data.results) ? data.results : [];
+        if (results.length === 0) {
+          appendSystem(`No document matches for “${query}”.`);
+          return;
+        }
+        const formatted = results
+          .map(
+            (item: any, index: number) =>
+              `${index + 1}. ${item?.metadata?.title ?? "Untitled"} — ${item?.memory?.slice?.(0, 200) ?? "—"}... (score: ${
+                item?.score?.toFixed?.(3) ?? "?"
+              })`
+          )
+          .join("\n\n");
+        appendSystem(`Document vector search results for “${query}”:\n\n${formatted}`);
+      } catch (error) {
+        console.error(error);
+        appendSystem("Could not reach the documentvectorsearch endpoint.");
       }
       return;
     }

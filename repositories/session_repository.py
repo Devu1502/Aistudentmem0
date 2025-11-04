@@ -4,8 +4,6 @@ from typing import List, Optional
 
 import sqlite3
 
-from config.settings import settings
-
 SESSION_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS session_meta (
     session_id TEXT PRIMARY KEY

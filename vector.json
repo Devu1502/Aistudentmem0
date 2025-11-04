@@ -1,4 +1,8 @@
 {
-  "vector": [-0.06395222, 0.07830348, -0.17852479, …],
-  "limit": 5
+  "builds": [
+    { "src": "frontend/package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/frontend/$1" }
+  ]
 }

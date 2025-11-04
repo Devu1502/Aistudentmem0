@@ -16,3 +16,4 @@ frontend/.next/
 
 # Secrets
 .env
+.vercel
