@@ -2,7 +2,6 @@ import re
 from datetime import datetime
 from typing import Optional, Tuple
 
-from db.sqlite import get_connection
 from memory import LocalMemory
 from repositories import session_repository
 
@@ -41,17 +40,13 @@ def handle_system_action(action: str, session_id: str, memory: LocalMemory):
 
 
 def update_topic(session_id: str, topic: str):
-    with get_connection() as conn:
-        session_repository.ensure_table(conn)
-        timestamp = datetime.utcnow().isoformat()
-        session_repository.rename_session(conn, session_id, topic, timestamp)
+    timestamp = datetime.utcnow().isoformat()
+    session_repository.rename_session(None, session_id, topic, timestamp)
 
 
 def start_session(topic: str = "general") -> str:
     sid = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    with get_connection() as conn:
-        session_repository.ensure_table(conn)
-        session_repository.rename_session(conn, sid, topic, datetime.utcnow().isoformat())
+    session_repository.rename_session(None, sid, topic, datetime.utcnow().isoformat())
     return sid
 
 

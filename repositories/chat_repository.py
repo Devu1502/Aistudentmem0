@@ -1,43 +1,20 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 from typing import List, Tuple
 
-import sqlite3
+from repositories.mongo_repository import fetch_history as mongo_fetch_history
+from repositories.mongo_repository import insert_message as mongo_insert_message
 
 
-CHAT_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS chat_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
-    user_input TEXT,
-    ai_output TEXT,
-    timestamp TEXT
-);
-"""
+def ensure_table(_conn=None) -> None:
+    return None
 
 
-def ensure_table(conn: sqlite3.Connection) -> None:
-    conn.execute(CHAT_TABLE_SQL)
-    conn.commit()
+def fetch_history(_conn, session_id: str) -> List[Tuple[str, str]]:
+    return mongo_fetch_history(session_id)
 
 
-def fetch_history(conn: sqlite3.Connection, session_id: str) -> List[Tuple[str, str]]:
-    cur = conn.execute(
-        "SELECT user_input, ai_output FROM chat_history WHERE session_id=? ORDER BY id ASC;",
-        (session_id,),
-    )
-    return [(row[0], row[1]) for row in cur.fetchall() if row[0] or row[1]]
-
-
-def insert_message(
-    conn: sqlite3.Connection,
-    session_id: str,
-    user_input: str,
-    ai_output: str,
-    timestamp: str,
-) -> None:
-    conn.execute(
-        "INSERT INTO chat_history (session_id, user_input, ai_output, timestamp) VALUES (?, ?, ?, ?);",
-        (session_id, user_input, ai_output, timestamp),
-    )
-    conn.commit()
+def insert_message(_conn, session_id: str, user_input: str, ai_output: str, timestamp: str) -> None:
+    mongo_insert_message(session_id, user_input, ai_output, timestamp)

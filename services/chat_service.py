@@ -6,7 +6,6 @@ from typing import Dict, Optional
 from agents import Runner  # type: ignore
 
 from core.agent import chat_agent
-from db.sqlite import get_connection
 from doc_store import DocumentStore
 from intent_utils import handle_system_action, sanitize_reply
 from memory import LocalMemory
@@ -26,10 +25,7 @@ class ChatService:
         active_session = session_id or generate_session_id()
         teach_on = is_teach_mode_on()
 
-        with get_connection() as conn:
-            chat_repository.ensure_table(conn)
-            session_repository.ensure_table(conn)
-            context = self.context_builder.build(conn, prompt, active_session, teach_on)
+        context = self.context_builder.build(prompt, active_session, teach_on)
 
         if teach_on:
             print("Teach Mode active - skipping chat history aggregation.")
@@ -81,11 +77,8 @@ class ChatService:
         print(f"Storing short-term memory snippet:\n{conversation_summary[:300]}")
 
         timestamp = datetime.utcnow().isoformat()
-        with get_connection() as conn:
-            chat_repository.ensure_table(conn)
-            session_repository.ensure_table(conn)
-            chat_repository.insert_message(conn, active_session, prompt, reply_text, timestamp)
-            session_repository.update_session_timestamps(conn, active_session, timestamp)
+        chat_repository.insert_message(None, active_session, prompt, reply_text, timestamp)
+        session_repository.update_session_timestamps(None, active_session, timestamp)
 
         print("Chat record inserted successfully.")
 

@@ -24,7 +24,6 @@ class ContextBuilder:
 
     def build(
         self,
-        conn,
         prompt: str,
         session_id: str,
         teach_mode: bool,
@@ -32,7 +31,7 @@ class ContextBuilder:
         if teach_mode:
             return ContextResult(chat_context="", history_rows=[], memory_hits=[], document_hits=[])
 
-        history_rows = chat_repository.fetch_history(conn, session_id)
+        history_rows = chat_repository.fetch_history(None, session_id)
         history_text = "\n".join(
             [f"Teacher: {row[0]}\nStudent: {row[1]}" for row in history_rows if row]
         )
