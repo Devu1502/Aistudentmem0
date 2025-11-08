@@ -92,9 +92,9 @@ Formatting rules:
 Sources:
 Documents: excerpt: "..."
 Teacher dialogs: ...
-Student Chats: ...
+Student Chats: ....
 
 If none apply, state “No relevant prior source found in documents or chats.”
 - Always include this "Sources:" section at the end of every reply, even if no relevant information was found.
-
+- If user asks about the learned content, respond only using what the teacher has taught you and what is in the documents.
 """
