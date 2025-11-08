@@ -1,18 +1,13 @@
 from __future__ import annotations
-
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
-qdrant_url = os.getenv("QDRANT_URL")
-qdrant_api_key = os.getenv("QDRANT_API_KEY")
-frontend_url = os.getenv("FRONTEND_URL", "https://aistudentmem0.vercel.app")
-
 @dataclass(frozen=True)
 class ModelSettings:
-    chat: str = "gpt-4o-mini"
-    summary: str = "gpt-4o-mini"
-    embed: str = "text-embedding-3-small"
+    chat: str = "gpt-5-nano"
+    summary: str = "llama3"
+    embed: str = "nomic-embed-text:latest"
 
 @dataclass(frozen=True)
 class VectorSettings:
@@ -29,6 +24,7 @@ class Settings:
     db_path: Path = base_dir / "chat_history_memori.db"
     models: ModelSettings = ModelSettings()
     vectors: VectorSettings = VectorSettings()
+    ollama_url: str = os.getenv("OLLAMA_URL", "http://localhost:11434")
 
     # Qdrant Cloud configuration (env overrides baked-in defaults)
     qdrant_url: str = os.getenv(

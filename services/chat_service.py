@@ -13,6 +13,7 @@ from repositories import chat_repository, session_repository
 from services.context_builder import ContextBuilder
 from teach_mode import is_teach_mode_on
 from utils.ids import generate_session_id
+from config.prompts import DEFAULT_AGENT_INSTRUCTIONS  
 
 
 class ChatService:
@@ -46,11 +47,34 @@ class ChatService:
                     print(f"    - {snippet}")
             else:
                 print("Document hits: none")
+        # Combine all context elements before building final prompt
+        combined_context = ""
+        if context.document_hits:
+            combined_context += "[Uploaded Document Context]\n" + "\n".join(context.document_hits) + "\n\n"
+        if context.memory_hits:
+            combined_context += "[Related Memories]\n" + "\n".join(context.memory_hits) + "\n\n"
+        if context.chat_context:
+            combined_context += f"[Conversation History]\n{context.chat_context}\n\n"
+
+
+        # Override chat_context for prompt composition
+        context.chat_context = combined_context
+
+
 
         user_prompt = self._compose_prompt(active_session, teach_on, context.chat_context, prompt)
+
+
+        # user_prompt += "\n\nIf any uploaded document context mentions the current topic, summarize what is visible in that document and include a final 'Sources:' section following your formatting rules."
         preview_context = "" if teach_on else context.chat_context
         print("Calling OpenAI Agent (async)...")
-        print(f"LLM context preview (first 1000 chars):\n{preview_context[:1000]}")
+        # print(f"LLM context preview (first 1000 chars):\n{preview_context[:1000]}")
+
+
+        # 🔍 Print full composed prompt (to verify document + memory context injection)
+        print("\n========== FULL PROMPT SENT TO LLM ==========")
+        print(user_prompt)
+        print("========== END FULL PROMPT ==========\n")
 
         result = await Runner.run(chat_agent, user_prompt)
         raw_reply = getattr(result, "final_output", "") or ""
@@ -95,7 +119,14 @@ class ChatService:
         return (
             f"[Session: {session_id}] [TeachMode: {'ON' if teach_on else 'OFF'}]\n"
             f"[Time: {datetime.utcnow().isoformat()}]\n"
-            f"Context:\n{context_section}\n\nTeacher: {prompt}\nStudent:"
+            # 🆕 New line to include summarized session context
+            f"[Session Summaries]\n{{session_summaries_context}}\n\n"
+            f"{context_section}\n"
+            f"\n---\nIMPORTANT: Summarize and reason strictly from [Uploaded Document Context] "
+            f"and [Teacher dialogs] whenever available. Treat documents as already taught material.\n"
+            f"\nAlways summarize directly from the document excerpts above if they relate to the topic.\n"
+            f"{DEFAULT_AGENT_INSTRUCTIONS.strip()}\n\n"
+            f"Teacher: {prompt}\nStudent:"
         )
 
     @staticmethod

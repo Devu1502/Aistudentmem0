@@ -3,11 +3,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from markitdown import MarkItDown
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 
-def transcribe_any_file(filepath: str):
-    """Transcribe any supported file (PDF, PPTX, DOCX, XLSX, JPG, PNG, etc.) using MarkItDown."""
+def extract_pdf(filepath: str):
+    """Extract plain text from a PDF file using PyPDF."""
     path = Path(filepath)
     if not path.exists():
         print(f"File not found: {path}")
@@ -15,22 +16,24 @@ def transcribe_any_file(filepath: str):
 
     print(f"Processing: {path.name}")
 
-    md = MarkItDown(enable_plugins=False)
-
     try:
-        result = md.convert(str(path))
-        output_md = path.with_suffix(".md")
-        with open(output_md, "w", encoding="utf-8") as f:
-            f.write(result.text_content)
-        print(f"Transcribed -> {output_md}")
-    except Exception as e:
-        print(f"Error processing {path.name}: {e}")
+        reader = PdfReader(str(path))
+        output_txt = path.with_suffix(".txt")
+        with open(output_txt, "w", encoding="utf-8") as f:
+            for page in reader.pages:
+                text = page.extract_text() or ""
+                f.write(text)
+        print(f"Extracted -> {output_txt}")
+    except PdfReadError as err:
+        print(f"Unable to read {path.name}: {err}")
+    except Exception as err:
+        print(f"Error processing {path.name}: {err}")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python markitdown_auto_detect.py <file1> [<file2> ...]")
+        print("Usage: python markitdown_auto_detect.py <pdf1> [<pdf2> ...]")
         sys.exit(1)
 
     for file in sys.argv[1:]:
-        transcribe_any_file(file)
+        extract_pdf(file)

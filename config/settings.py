@@ -1,12 +1,8 @@
 from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
-
-
-def running_on_vercel() -> bool:
-    """Detect if running on Vercel serverless environment."""
-    return bool(os.getenv("VERCEL_ENV") or os.getenv("VERCEL_URL"))
 
 
 @dataclass(frozen=True)
@@ -30,20 +26,23 @@ class VectorSettings:
 
 @dataclass(frozen=True)
 class Settings:
-    """Global configuration for local and Vercel environments."""
+    """Global configuration for local development."""
     base_dir: Path = Path(__file__).resolve().parent.parent
-    db_path: Path = base_dir / "chat_history_memori.db"
+    db_path: Path = base_dir / "chat_history_memori.db.bak"  # disabled local SQLite
 
     models: ModelSettings = ModelSettings()
     vectors: VectorSettings = VectorSettings()
 
-    # Frontend origin (switches automatically between local and deployed)
-    frontend_url: str = (
-        os.getenv("FRONTEND_URL")
-        or ("https://aistudentmem0.vercel.app" if running_on_vercel() else "http://localhost:3000")
+    # MongoDB connection (Atlas + local fallback)
+    mongodb_uri: str = os.getenv(
+        "MONGODB_URI",
+        "mongodb+srv://devananda1502_db_user:PDuFX3jYjvQJSLy3@aibuddy.furcexz.mongodb.net/?appName=AIBuddy",
     )
 
-    # Qdrant Cloud connection (env vars override local defaults)
+    # Frontend origin (defaults to local dev server)
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    # Qdrant connection (Cloud or local)
     qdrant_url: str = os.getenv(
         "QDRANT_URL",
         "https://75980000-12ff-49b5-8bee-f4e30ac3353a.us-east4-0.gcp.cloud.qdrant.io:6333",
@@ -53,9 +52,9 @@ class Settings:
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.ZbZSc4J8Y20_twaDVla2xCOqVigNfp7q7czfN-q2IVI",
     )
 
-    # Optional flag for runtime context
-    environment: str = "vercel" if running_on_vercel() else "local"
+    # Environment flag (optional override)
+    environment: str = os.getenv("APP_ENV", "local")
 
 
-# Instantiate the global settings object
+# Instantiate global settings
 settings = Settings()
