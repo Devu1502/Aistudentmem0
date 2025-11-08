@@ -7,6 +7,7 @@ from config.settings import settings
 from doc_store import DocumentStore
 from memory import LocalMemory
 from repositories import chat_repository
+from repositories.mongo_repository import fetch_recent_session_summaries
 
 
 @dataclass
@@ -15,6 +16,7 @@ class ContextResult:
     history_rows: List[tuple[str, str]]
     memory_hits: List[str]
     document_hits: List[str]
+    session_summaries: str
 
 
 class ContextBuilder:
@@ -29,7 +31,7 @@ class ContextBuilder:
         teach_mode: bool,
     ) -> ContextResult:
         if teach_mode:
-            return ContextResult(chat_context="", history_rows=[], memory_hits=[], document_hits=[])
+            return ContextResult(chat_context="", history_rows=[], memory_hits=[], document_hits=[], session_summaries="")
 
         history_rows = chat_repository.fetch_history(None, session_id)
         history_text = "\n".join(
@@ -38,15 +40,26 @@ class ContextBuilder:
 
         memory_hits = self._memory_hits(prompt, session_id)
         doc_hits = self._document_hits(prompt)
+        summary_text = self._session_summaries()
 
-        sections = [history_text] if history_text else []
+        sections = []
+        unique_docs = list(dict.fromkeys(doc_hits))
+        doc_section = ""
+        mem_section = ""
+        if unique_docs:
+            doc_section = "[Uploaded Document Context]\n" + "\n\n".join(unique_docs)
         if memory_hits:
-            sections.append("[Relevant Past Knowledge]\n" + "\n".join(memory_hits))
-        if doc_hits:
-            sections.append("[Uploaded Document Context]\n" + "\n\n".join(doc_hits))
-
-        chat_context = "\n\n".join([s for s in sections if s])
-        return ContextResult(chat_context=chat_context, history_rows=history_rows, memory_hits=memory_hits, document_hits=doc_hits)
+            mem_section = "[Related Memories]\n" + "\n".join(memory_hits)
+        if history_text:
+            sections.append(history_text)
+        chat_context = "\n\n".join([s for s in [doc_section, mem_section, history_text] if s])
+        return ContextResult(
+            chat_context=chat_context,
+            history_rows=history_rows,
+            memory_hits=memory_hits,
+            document_hits=doc_hits,
+            session_summaries=summary_text,
+        )
 
     def _memory_hits(self, prompt: str, session_id: str) -> List[str]:
         results = self.memory_store.search(
@@ -89,3 +102,22 @@ class ContextBuilder:
             snippet = item.get("memory") or ""
             snippets.append(f"{title}:\n{snippet}")
         return snippets
+
+    @staticmethod
+    def _session_summaries(limit: int = 5) -> str:
+        docs = fetch_recent_session_summaries(limit=limit)
+        if not docs:
+            return ""
+        blocks: List[str] = []
+        for doc in docs:
+            sid = doc.get("session_id", "unknown")
+            teacher_summary = doc.get("teacher_summary", "").strip()
+            student_summary = doc.get("student_summary", "").strip()
+            parts = []
+            if teacher_summary:
+                parts.append(f"[Teacher Summary - {sid}]\n{teacher_summary}")
+            if student_summary:
+                parts.append(f"[Student Summary - {sid}]\n{student_summary}")
+            if parts:
+                blocks.append("\n".join(parts))
+        return "\n\n".join(blocks)

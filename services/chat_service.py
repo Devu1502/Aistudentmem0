@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Dict, Optional
 
 from agents import Runner  # type: ignore
 
+from config.prompts import DEFAULT_AGENT_INSTRUCTIONS
 from core.agent import chat_agent
 from doc_store import DocumentStore
-from intent_utils import handle_system_action, sanitize_reply
+from intent_utils import handle_reset_command, handle_system_action, sanitize_reply
 from memory import LocalMemory
 from repositories import chat_repository, session_repository
-from services.context_builder import ContextBuilder
+from services.context_builder import ContextBuilder, ContextResult
+from services.summarizer import summarize_session
+from services.token_utils import count_tokens
 from teach_mode import is_teach_mode_on
 from utils.ids import generate_session_id
-from config.prompts import DEFAULT_AGENT_INSTRUCTIONS  
 
 
 class ChatService:
@@ -62,7 +65,13 @@ class ChatService:
 
 
 
-        user_prompt = self._compose_prompt(active_session, teach_on, context.chat_context, prompt)
+        user_prompt = self._compose_prompt(
+            active_session,
+            teach_on,
+            context.session_summaries,
+            context.chat_context,
+            prompt,
+        )
 
 
         # user_prompt += "\n\nIf any uploaded document context mentions the current topic, summarize what is visible in that document and include a final 'Sources:' section following your formatting rules."
@@ -76,6 +85,8 @@ class ChatService:
         print(user_prompt)
         print("========== END FULL PROMPT ==========\n")
 
+        self._print_context_outline(context)
+
         result = await Runner.run(chat_agent, user_prompt)
         raw_reply = getattr(result, "final_output", "") or ""
         print(f"Raw LLM reply: {raw_reply!r}")
@@ -83,6 +94,15 @@ class ChatService:
         reply_text = self._prepare_reply(raw_reply, teach_on)
         silent = teach_on
         reply_text, action_data = sanitize_reply(reply_text)
+
+        manual_reset = handle_reset_command(prompt.strip())
+        if manual_reset:
+            return {
+                "response": manual_reset,
+                "context_count": 0,
+                "session_id": active_session,
+                "silent": False,
+            }
 
         if action_data:
             sys_reply, _ = handle_system_action(action_data, active_session, self.memory_store)
@@ -101,8 +121,13 @@ class ChatService:
         print(f"Storing short-term memory snippet:\n{conversation_summary[:300]}")
 
         timestamp = datetime.utcnow().isoformat()
-        chat_repository.insert_message(None, active_session, prompt, reply_text, timestamp)
+        user_entry = prompt if not self._is_context_block(prompt) else ""
+        reply_entry = reply_text if not self._is_context_block(reply_text) else ""
+        if user_entry or reply_entry:
+            chat_repository.insert_message(None, active_session, user_entry, reply_entry, timestamp)
         session_repository.update_session_timestamps(None, active_session, timestamp)
+
+        self._maybe_queue_summary(context, active_session)
 
         print("Chat record inserted successfully.")
 
@@ -114,20 +139,29 @@ class ChatService:
         }
 
     @staticmethod
-    def _compose_prompt(session_id: str, teach_on: bool, chat_context: str, prompt: str) -> str:
+    def _compose_prompt(
+        session_id: str,
+        teach_on: bool,
+        session_summaries: str,
+        chat_context: str,
+        prompt: str,
+    ) -> str:
         context_section = chat_context if not teach_on else ""
+        summaries_section = f"[Session Summaries]\n{session_summaries.strip()}\n\n" if session_summaries else ""
         return (
             f"[Session: {session_id}] [TeachMode: {'ON' if teach_on else 'OFF'}]\n"
             f"[Time: {datetime.utcnow().isoformat()}]\n"
-            # 🆕 New line to include summarized session context
-            f"[Session Summaries]\n{{session_summaries_context}}\n\n"
             f"{context_section}\n"
-            f"\n---\nIMPORTANT: Summarize and reason strictly from [Uploaded Document Context] "
-            f"and [Teacher dialogs] whenever available. Treat documents as already taught material.\n"
-            f"\nAlways summarize directly from the document excerpts above if they relate to the topic.\n"
+            f"{summaries_section}"
+            f"\n---\nIMPORTANT:\n"
+            f" • Treat [Uploaded Document Context] and [Related Memories] as previously taught material whenever relevant.\n"
+            f" • When the teacher paraphrases earlier topics, infer continuity and answer using prior knowledge.\n"
+            f" • Student messages are conversational reflections only; rely on Teacher and Document content for facts.\n"
+            f" • Summaries of prior sessions are authoritative for continuing the current dialogue.\n"
             f"{DEFAULT_AGENT_INSTRUCTIONS.strip()}\n\n"
             f"Teacher: {prompt}\nStudent:"
         )
+
 
     @staticmethod
     def _prepare_reply(raw_reply: str, teach_on: bool) -> str:
@@ -135,3 +169,59 @@ class ChatService:
             return ""
         reply = raw_reply.strip()
         return reply if reply else "Agent returned no output."
+
+    def _maybe_queue_summary(self, context: ContextResult, session_id: str) -> None:
+        turn_count = len(context.history_rows)
+        token_count = count_tokens(context.chat_context)
+        if turn_count == 0:
+            return
+        if token_count <= 2000 and turn_count % 6 != 0:
+            return
+
+        teacher_lines = [row[0] for row in context.history_rows if row and row[0]]
+        student_lines = [row[1] for row in context.history_rows if row and row[1]]
+        teacher_text = "\n".join(teacher_lines)
+        student_text = "\n".join(student_lines)
+        if not teacher_text and not student_text:
+            return
+
+        asyncio.create_task(summarize_session(session_id, teacher_text, student_text))
+
+    @staticmethod
+    def _is_context_block(text: str) -> bool:
+        if not text:
+            return False
+        trimmed = text.strip()
+        disallowed_prefixes = (
+            "[Uploaded Document Context]",
+            "[Related Memories]",
+            "[Session Summaries]",
+            "========== FULL PROMPT",
+            "========== CONTEXT OUTLINE",
+        )
+        return any(trimmed.startswith(prefix) for prefix in disallowed_prefixes)
+
+    def _print_context_outline(self, context: ContextResult) -> None:
+        def preview_section(title: str, text: str, limit: int = 100) -> None:
+            if not text:
+                print(f"⚪ {title}: None")
+                return
+            words = text.split()
+            preview = " ".join(words[:limit])
+            if len(words) > limit:
+                preview += " ..."
+            print(f"🟢 {title} ({len(words)} words):\n{preview}\n")
+
+        print("\n========== CONTEXT OUTLINE ==========")
+        preview_section("Uploaded Document Context", "\n".join(context.document_hits))
+        preview_section("Related Memories", "\n".join(context.memory_hits))
+        preview_section("Session Summaries", context.session_summaries or "")
+        preview_section("Conversation History", context.chat_context)
+        print("========== END OUTLINE ==========\n")
+        print(
+            "Token counts — "
+            f"Docs:{count_tokens(' '.join(context.document_hits))} | "
+            f"Mem:{count_tokens(' '.join(context.memory_hits))} | "
+            f"Summ:{count_tokens(context.session_summaries or '')} | "
+            f"Chat:{count_tokens(context.chat_context)}"
+        )

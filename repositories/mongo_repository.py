@@ -14,11 +14,14 @@ client = MongoClient(MONGO_URI)
 db = client["AIBuddy"]
 chat_collection = db["chat_messages"]
 session_collection = db["sessions"]
+summary_collection = db["session_summaries"]
 
 
 def _ensure_indexes() -> None:
     chat_collection.create_index([("session_id", ASCENDING), ("timestamp", DESCENDING)])
     session_collection.create_index([("session_id", ASCENDING)], unique=True)
+    summary_collection.create_index([("created_at", DESCENDING)])
+    summary_collection.create_index([("session_id", ASCENDING), ("created_at", DESCENDING)])
 
 
 _ensure_indexes()
@@ -80,6 +83,7 @@ def rename_session(session_id: str, new_title: str, timestamp: str) -> None:
 def delete_session(session_id: str) -> None:
     session_collection.delete_one({"session_id": session_id})
     chat_collection.delete_many({"session_id": session_id})
+    summary_collection.delete_many({"session_id": session_id})
 
 
 def _clean_numeric(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -123,3 +127,18 @@ def latest_message(session_id: str) -> Optional[Dict[str, Any]]:
 def fetch_session_messages(session_id: str) -> List[Dict[str, Any]]:
     cursor = chat_collection.find({"session_id": session_id}, {"_id": 0}).sort("timestamp", ASCENDING)
     return [_clean_numeric(doc) for doc in cursor]
+
+
+def insert_session_summary(session_id: str, teacher_summary: str, student_summary: str, created_at: Optional[datetime] = None) -> None:
+    summary_doc = {
+        "session_id": session_id,
+        "teacher_summary": teacher_summary,
+        "student_summary": student_summary,
+        "created_at": created_at or datetime.utcnow(),
+    }
+    summary_collection.insert_one(summary_doc)
+
+
+def fetch_recent_session_summaries(limit: int = 2) -> List[Dict[str, Any]]:
+    docs = summary_collection.find({}, {"_id": 0}).sort("created_at", DESCENDING).limit(limit)
+    return [_clean_numeric(doc) for doc in docs]

@@ -466,6 +466,14 @@ export default function ChatApp() {
     await sendPrompt(trimmed);
   };
 
+  const handleClearMongo = async () => {
+    await processInput("/resetMongodb");
+  };
+
+  const handleClearQdrant = async () => {
+    await processInput("/resetQdrant");
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     await processInput(input);
@@ -756,6 +764,16 @@ export default function ChatApp() {
       return;
     }
 
+    if (normalized === "resetmongodb") {
+        await sendPrompt("/resetMongodb");
+        return;
+    }
+
+    if (normalized === "resetqdrant") {
+        await sendPrompt("/resetQdrant");
+        return;
+    }
+
     if (normalized === "all") {
       try {
         const res = await fetch(`${API_BASE}/all`);
@@ -841,6 +859,8 @@ export default function ChatApp() {
           onRenameCancel={handleRenameCancel}
           onTitleChange={setNewTitle}
           onDeleteSession={handleDeleteSession}
+          onClearMongo={handleClearMongo}
+          onClearQdrant={handleClearQdrant}
         />
 
         <main className="chat-main">
