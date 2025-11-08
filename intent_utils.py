@@ -2,10 +2,8 @@ import re
 from datetime import datetime
 from typing import Optional, Tuple
 
-from config.settings import settings
 from memory import LocalMemory
 from repositories import session_repository
-from repositories.mongo_repository import db
 
 
 def sanitize_reply(reply: str) -> Tuple[str, Optional[str]]:
@@ -41,17 +39,6 @@ def handle_system_action(action: str, session_id: str, memory: LocalMemory):
     return None, None
 
 
-def handle_reset_command(command: str) -> Optional[str]:
-    cmd = command.strip()
-    if cmd == "/resetQdrant":
-        LocalMemory(collection_name=settings.vectors.chat_collection).reset()
-        LocalMemory(collection_name=settings.vectors.document_collection).reset()
-        return "✅ Qdrant collections (chat + documents) reset successfully."
-    if cmd == "/resetMongodb":
-        for coll in ["chat_messages", "sessions", "session_summaries"]:
-            db[coll].drop()
-        return "✅ MongoDB chat history and summaries cleared successfully."
-    return None
 
 
 def update_topic(session_id: str, topic: str):

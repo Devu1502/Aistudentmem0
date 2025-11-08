@@ -20,8 +20,6 @@ type SidebarProps = {
   onRenameCancel: () => void;
   onTitleChange: (value: string) => void;
   onDeleteSession: (sessionId: string) => void;
-  onClearMongo: () => void;
-  onClearQdrant: () => void;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -42,20 +40,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRenameCancel,
   onTitleChange,
   onDeleteSession,
-  onClearMongo,
-  onClearQdrant,
 }) => {
   return (
     <aside className="chat-sidebar">
       <div className="sidebar-header">
         <button className="ghost-button large" onClick={onNewChat}>
           + New Chat
-        </button>
-        <button className="ghost-button danger" onClick={onClearMongo}>
-          Clear MongoDB
-        </button>
-        <button className="ghost-button danger" onClick={onClearQdrant}>
-          Clear Qdrant
         </button>
       </div>
 

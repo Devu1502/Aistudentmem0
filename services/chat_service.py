@@ -9,7 +9,7 @@ from agents import Runner  # type: ignore
 from config.prompts import DEFAULT_AGENT_INSTRUCTIONS
 from core.agent import chat_agent
 from doc_store import DocumentStore
-from intent_utils import handle_reset_command, handle_system_action, sanitize_reply
+from intent_utils import handle_system_action, sanitize_reply
 from memory import LocalMemory
 from repositories import chat_repository, session_repository
 from services.context_builder import ContextBuilder, ContextResult
@@ -94,15 +94,6 @@ class ChatService:
         reply_text = self._prepare_reply(raw_reply, teach_on)
         silent = teach_on
         reply_text, action_data = sanitize_reply(reply_text)
-
-        manual_reset = handle_reset_command(prompt.strip())
-        if manual_reset:
-            return {
-                "response": manual_reset,
-                "context_count": 0,
-                "session_id": active_session,
-                "silent": False,
-            }
 
         if action_data:
             sys_reply, _ = handle_system_action(action_data, active_session, self.memory_store)
