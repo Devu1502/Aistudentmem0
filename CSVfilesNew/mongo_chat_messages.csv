@@ -1,0 +1,15 @@
+session_id,user_input,ai_output,timestamp
+20251108-161250-9b1a3c89,blu the dog,"You haven’t taught me that yet. Should we switch our topic to ""blu the dog,"" or stay with the current topic?",2025-11-08T16:12:53.786345
+20251108-161250-9b1a3c89,yes,"You haven’t taught me that yet. Should we switch our topic to ""blu the dog,"" or stay with the current topic? 
+
+Sources:
+Documents: None.
+Teacher dialogs: None.
+Student Chats: None.",2025-11-08T16:13:29.928708
+20251108-161250-9b1a3c89,yes new topic Blu the dog,"Understood! The topic is ""Blu the dog."" You haven’t taught me anything yet. What would you like to teach me first?",2025-11-08T16:13:43.880603
+20251110-035105-5cb20620,what is ransomware?,"You haven't taught me that yet. Should we switch our topic to ""ransomware,"" or stay with ""Blu the dog""? 
+
+Sources:
+Documents: None.
+Teacher dialogs: None.
+Student Chats: None.",2025-11-10T03:51:12.680968

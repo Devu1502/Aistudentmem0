@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { API_BASE } from "../apiConfig";
 
 export type SessionInfo = {
   session_id: string;
@@ -6,8 +7,6 @@ export type SessionInfo = {
   preview: string;
   title?: string;
 };
-
-const API_BASE = "http://127.0.0.1:8010";
 
 export const useSessions = () => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);

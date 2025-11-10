@@ -46,7 +46,7 @@ class Settings:
     # Frontend origin (defaults to local dev server)
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-    # Qdrant connection (Cloud or local)
+    # Qdrant connection
     qdrant_url: str = os.getenv(
         "QDRANT_URL",
         "https://75980000-12ff-49b5-8bee-f4e30ac3353a.us-east4-0.gcp.cloud.qdrant.io:6333",
@@ -56,9 +56,8 @@ class Settings:
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.ZbZSc4J8Y20_twaDVla2xCOqVigNfp7q7czfN-q2IVI",
     )
 
-    # Environment flag (optional override)
     environment: str = os.getenv("APP_ENV", "local")
 
 
-# Instantiate global settings
+# global settings
 settings = Settings()

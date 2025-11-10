@@ -4,6 +4,7 @@ import "./App.css";
 import { Sidebar } from "./components/Sidebar";
 import { useTeachMode } from "./hooks/useTeachMode";
 import { useSessions } from "./hooks/useSessions";
+import { API_BASE } from "./apiConfig";
 
 type MessageRole = "teacher" | "student" | "system";
 
@@ -20,7 +21,6 @@ type CommandDefinition = {
   description: string;
 };
 
-const API_BASE = "http://127.0.0.1:8010";
 const STT_URL = `${API_BASE}/stt`;
 const TTS_URL = `${API_BASE}/tts`;
 
