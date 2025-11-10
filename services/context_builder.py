@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List
 
 from config.settings import settings
+from config.hyperparameters import hyperparams
 from doc_store import DocumentStore
 from memory import LocalMemory
 from repositories import chat_repository
@@ -34,24 +35,23 @@ class ContextBuilder:
             return ContextResult(chat_context="", history_rows=[], memory_hits=[], document_hits=[], session_summaries="")
 
         history_rows = chat_repository.fetch_history(None, session_id)
+        history_rows_limited = history_rows[-hyperparams.max_history_turns :]
         history_text = "\n".join(
-            [f"Teacher: {row[0]}\nStudent: {row[1]}" for row in history_rows if row]
+            [f"Teacher: {row[0]}\nStudent: {row[1]}" for row in history_rows_limited if row]
         )
 
         memory_hits = self._memory_hits(prompt, session_id)
         doc_hits = self._document_hits(prompt)
         summary_text = self._session_summaries()
 
-        sections = []
-        unique_docs = list(dict.fromkeys(doc_hits))
+        unique_docs = list(dict.fromkeys(doc_hits))[: hyperparams.document_limit]
+        memory_hits = memory_hits[: hyperparams.memory_limit]
         doc_section = ""
         mem_section = ""
         if unique_docs:
             doc_section = "[Uploaded Document Context]\n" + "\n\n".join(unique_docs)
         if memory_hits:
             mem_section = "[Related Memories]\n" + "\n".join(memory_hits)
-        if history_text:
-            sections.append(history_text)
         chat_context = "\n\n".join([s for s in [doc_section, mem_section, history_text] if s])
         return ContextResult(
             chat_context=chat_context,
@@ -93,10 +93,10 @@ class ContextBuilder:
         return hits
 
     def _document_hits(self, prompt: str) -> List[str]:
-        results = self.document_store.search(prompt, limit=settings.vectors.document_search_limit)
+        results = self.document_store.search(prompt, limit=hyperparams.document_limit)
         doc_hits = results.get("results", []) if isinstance(results, dict) else []
         snippets = []
-        for item in doc_hits[: settings.vectors.document_search_limit]:
+        for item in doc_hits[: hyperparams.document_limit]:
             meta = item.get("metadata", {})
             title = meta.get("title") or meta.get("filename") or "Document"
             snippet = item.get("memory") or ""
@@ -104,7 +104,7 @@ class ContextBuilder:
         return snippets
 
     @staticmethod
-    def _session_summaries(limit: int = 5) -> str:
+    def _session_summaries(limit: int = hyperparams.summary_limit) -> str:
         docs = fetch_recent_session_summaries(limit=limit)
         if not docs:
             return ""
