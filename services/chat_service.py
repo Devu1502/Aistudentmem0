@@ -101,6 +101,11 @@ class ChatService:
                 reply_text = sys_reply
                 silent = False
 
+        reply_text, sources_block = self._split_sources_block(reply_text)
+        if sources_block:
+            print("Captured sources block from reply:")
+            print(sources_block)
+
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply_text}"
         self.memory_store.add(
             conversation_summary,
@@ -160,6 +165,18 @@ class ChatService:
             return ""
         reply = raw_reply.strip()
         return reply if reply else "Agent returned no output."
+
+    @staticmethod
+    def _split_sources_block(reply: str) -> tuple[str, str]:
+        if not reply:
+            return "", ""
+        marker = "Sources:"
+        idx = reply.find(marker)
+        if idx == -1:
+            return reply.strip(), ""
+        main_response = reply[:idx].rstrip()
+        sources_section = reply[idx:].strip()
+        return main_response, sources_section
 
     def _maybe_queue_summary(self, context: ContextResult, session_id: str) -> None:
         turn_count = len(context.history_rows)
