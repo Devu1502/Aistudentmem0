@@ -4,6 +4,7 @@ from typing_extensions import Literal, TypeAlias
 
 __all__ = ["ChatModel"]
 
+
 ChatModel: TypeAlias = Literal[
     "o1-preview",
     "o1-preview-2024-09-12",

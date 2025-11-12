@@ -12,8 +12,8 @@ load_dotenv()
 @dataclass(frozen=True)
 class ModelSettings:
     """Model configuration for chat, summarization, and embedding."""
-    chat: str = "gpt-4o-mini"
-    summary: str = "gpt-4o-mini"
+    chat: str = "gpt-5-nano"
+    summary: str = "gpt-5-nano"
     embed: str = "text-embedding-3-small"
 
 

@@ -10,7 +10,7 @@ class ContextHyperParameters:
     memory_limit: int = int(os.getenv("MEMORY_LIMIT", 5))
     summary_limit: int = int(os.getenv("SUMMARY_LIMIT", 2))
     max_history_turns: int = int(os.getenv("HISTORY_TURNS", 4))
-    summary_turn_interval: int = int(os.getenv("SUMMARY_TURN_INTERVAL", 6))
+    summary_turn_interval: int = int(os.getenv("SUMMARY_TURN_INTERVAL", 2))
     summary_token_threshold: int = int(os.getenv("SUMMARY_TOKEN_THRESHOLD", 2000))
 
 
