@@ -350,6 +350,11 @@
   height: 12px;
 }
 
+.typing-indicator.teach-mode {
+  height: auto;
+  justify-content: flex-start;
+}
+
 .typing-indicator span {
   width: 8px;
   height: 8px;
@@ -357,6 +362,15 @@
   background: #a855f7;
   opacity: 0.75;
   animation: typing-bounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator.teach-mode span {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  opacity: 1;
+  animation: none;
 }
 
 .typing-indicator span:nth-child(2) {
@@ -378,6 +392,24 @@
     transform: translateY(-6px);
     opacity: 1;
   }
+}
+
+.teach-mode-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #a855f7;
+}
+
+.teach-mode-status {
+  margin: 6px auto 12px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.18);
+  color: #166534;
+  font-size: 0.85rem;
+  font-weight: 600;
+  width: fit-content;
 }
 
 .chat-input {

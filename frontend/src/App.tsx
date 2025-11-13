@@ -7,6 +7,7 @@ import { useSessions } from "./hooks/useSessions";
 import { API_BASE } from "./apiConfig";
 
 type MessageRole = "teacher" | "student" | "system";
+type TeachStatus = "idle" | "learning" | "learned";
 
 type Message = {
   id: string;
@@ -111,11 +112,13 @@ export default function ChatApp() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [teachStatus, setTeachStatus] = useState<TeachStatus>("idle");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const initialisedRef = useRef(false);
+  const teachStatusTimeoutRef = useRef<number | null>(null);
 
   const pushSystemMessage = useCallback((text: string) => {
     setMessages((prev) => [...prev, createMessage("system", text)]);
@@ -431,6 +434,24 @@ export default function ChatApp() {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (teachStatusTimeoutRef.current) {
+        clearTimeout(teachStatusTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!teachMode && teachStatus !== "idle") {
+      setTeachStatus("idle");
+      if (teachStatusTimeoutRef.current) {
+        clearTimeout(teachStatusTimeoutRef.current);
+        teachStatusTimeoutRef.current = null;
+      }
+    }
+  }, [teachMode, teachStatus]);
+
   const handleInputChange = (value: string) => {
     setInput(value);
     if (value.startsWith("/")) {
@@ -472,9 +493,22 @@ export default function ChatApp() {
   };
 
   const sendPrompt = async (prompt: string) => {
+    const teachModeDuringSend = teachMode;
+    if (teachModeDuringSend) {
+      if (teachStatusTimeoutRef.current) {
+        clearTimeout(teachStatusTimeoutRef.current);
+        teachStatusTimeoutRef.current = null;
+      }
+      setTeachStatus("learning");
+    } else if (teachStatus !== "idle") {
+      setTeachStatus("idle");
+    }
+
     const teacherMessage = createMessage("teacher", prompt);
     setMessages((prev) => [...prev, teacherMessage]);
     setIsSending(true);
+
+    let silentResponse = false;
 
     try {
       const url = new URL(`${API_BASE}/chat`);
@@ -496,13 +530,13 @@ export default function ChatApp() {
       const data = await response.json();
       setSessionId(data.session_id ?? sessionId);
 
-      const silent = Boolean(data.silent);
+      silentResponse = Boolean(data.silent);
       const rawResponse = typeof data.response === "string" ? data.response : "";
       const trimmedResponse = rawResponse.trim();
       const assistantReply =
         trimmedResponse.length > 0 ? trimmedResponse : "I did not receive a response from the model.";
 
-      if (!silent) {
+      if (!silentResponse) {
         setMessages((prev) => [...prev, createMessage("student", assistantReply)]);
       }
       fetchSessions();
@@ -514,6 +548,17 @@ export default function ChatApp() {
       ]);
     } finally {
       setIsSending(false);
+      if (teachModeDuringSend) {
+        if (silentResponse) {
+          setTeachStatus("learned");
+          teachStatusTimeoutRef.current = window.setTimeout(() => {
+            setTeachStatus("idle");
+            teachStatusTimeoutRef.current = null;
+          }, 2500);
+        } else {
+          setTeachStatus("idle");
+        }
+      }
     }
   };
 
@@ -881,13 +926,25 @@ export default function ChatApp() {
                     <span className="role">Student</span>
                     <span className="time">…</span>
                   </div>
-                  <div className="typing-indicator">
-                    <span />
-                    <span />
-                    <span />
+                  <div className={`typing-indicator ${teachMode ? "teach-mode" : ""}`}>
+                    {teachMode ? (
+                      <span className="teach-mode-text">Learning…</span>
+                    ) : (
+                      <>
+                        <span />
+                        <span />
+                        <span />
+                      </>
+                    )}
                   </div>
                 </div>
               </article>
+            )}
+
+            {teachMode && teachStatus === "learned" && !isSending && (
+              <div className="teach-mode-status" role="status" aria-live="polite">
+                Learned!
+              </div>
             )}
             <div ref={bottomRef} />
           </section>
