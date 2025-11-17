@@ -12,7 +12,7 @@ from repositories.mongo_repository import insert_session_summary
 _client = OpenAI()
 
 
-async def summarize_session(session_id: str, teacher_text: str, student_text: str) -> None:
+async def summarize_session(session_id: str, teacher_text: str, student_text: str, user_id: str) -> None:
     """Generate and store a compact summary for the session."""
 
     def _run() -> Tuple[str, str]:
@@ -52,5 +52,6 @@ async def summarize_session(session_id: str, teacher_text: str, student_text: st
         session_id=session_id,
         teacher_summary=teacher_summary,
         student_summary=student_summary,
+        user_id=user_id,
         created_at=datetime.utcnow(),
     )

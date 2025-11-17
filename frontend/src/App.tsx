@@ -1,9 +1,15 @@
 import React, { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 
 import { Sidebar } from "./components/Sidebar";
+import { AuthShell } from "./components/AuthShell";
+import { LoginForm } from "./components/LoginForm";
+import { SignupForm, SignupFormValues } from "./components/SignupForm";
+import TermsPage from "./pages/TermsPage";
 import { useTeachMode } from "./hooks/useTeachMode";
 import { useSessions } from "./hooks/useSessions";
+import { useAuth } from "./hooks/useAuth";
 import { API_BASE } from "./apiConfig";
 
 type MessageRole = "teacher" | "student" | "system";
@@ -94,6 +100,8 @@ const ROLE_META: Record<MessageRole, { label: string; initial: string }> = {
   system: { label: "System", initial: "S" },
 };
 
+const TERMS_VERSION = "v1";
+
 export default function ChatApp() {
   const [messages, setMessages] = useState<Message[]>(() => [
     createMessage("system", "Welcome! Let's start when you're ready to teach."),
@@ -103,8 +111,12 @@ export default function ChatApp() {
   const [isSending, setIsSending] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
-  const { teachMode, refreshTeachMode, toggleTeachMode } = useTeachMode();
-  const { sessions, refreshing, fetchSessions, deleteSession, renameSession } = useSessions();
+  const { authChecking, isAuthenticated, user, token, login, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathNormalized = location.pathname.replace(/\/+$/, "") || "/";
+  const { teachMode, refreshTeachMode, toggleTeachMode } = useTeachMode(token);
+  const { sessions, refreshing, fetchSessions, deleteSession, renameSession } = useSessions(token);
   const [isUploading, setIsUploading] = useState(false);
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -113,6 +125,53 @@ export default function ChatApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [teachStatus, setTeachStatus] = useState<TeachStatus>("idle");
+
+  const authedFetch = useCallback(
+    (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers || {});
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+      return fetch(input, { ...init, headers });
+    },
+    [token]
+  );
+
+  const handleSignup = useCallback(
+    async (values: SignupFormValues) => {
+      try {
+        const payload = {
+          name: values.name?.trim() || undefined,
+          email: values.email.trim().toLowerCase(),
+          password: values.password,
+          password_confirm: values.passwordConfirm,
+          accept_terms: values.acceptTerms,
+          terms_version: TERMS_VERSION,
+        };
+        const res = await fetch(`${API_BASE}/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          return { success: false, message: text || "Unable to create account." };
+        }
+        const loginResult = await login(values.email, values.password);
+        if (!loginResult.success) {
+          return {
+            success: false,
+            message: loginResult.message ?? "Account created but auto-login failed. Please sign in manually.",
+          };
+        }
+        return { success: true };
+      } catch (error) {
+        console.error("Signup failed", error);
+        return { success: false, message: "Unable to create an account right now." };
+      }
+    },
+    [login]
+  );
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -127,7 +186,7 @@ export default function ChatApp() {
   const handleSelectSession = useCallback(
     async (selectedSessionId: string) => {
       try {
-        const res = await fetch(`${API_BASE}/session_messages?session_id=${selectedSessionId}`);
+        const res = await authedFetch(`${API_BASE}/session_messages?session_id=${selectedSessionId}`);
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         setSessionId(selectedSessionId);
@@ -144,7 +203,7 @@ export default function ChatApp() {
         pushSystemMessage("Failed to load session.");
       }
     },
-    [pushSystemMessage]
+    [authedFetch, pushSystemMessage]
   );
 
   useEffect(() => {
@@ -152,6 +211,9 @@ export default function ChatApp() {
   }, [messages, isSending]);
 
   useEffect(() => {
+    if (!isAuthenticated || !token) {
+      return;
+    }
     if (initialisedRef.current) {
       return;
     }
@@ -166,7 +228,13 @@ export default function ChatApp() {
     };
 
     initialise();
-  }, [fetchSessions, handleSelectSession, refreshTeachMode, sessionId]);
+  }, [fetchSessions, handleSelectSession, isAuthenticated, refreshTeachMode, sessionId, token]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      initialisedRef.current = false;
+    }
+  }, [isAuthenticated]);
 
   const filteredCommands = useMemo(() => {
     if (!showSuggestions) {
@@ -225,7 +293,7 @@ export default function ChatApp() {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
 
-      const response = await fetch(`${API_BASE}/documents/upload`, {
+      const response = await authedFetch(`${API_BASE}/documents/upload`, {
         method: "POST",
         body: formData,
       });
@@ -517,7 +585,7 @@ export default function ChatApp() {
         url.searchParams.set("session_id", sessionId);
       }
 
-      const response = await fetch(url.toString(), { method: "POST" });
+      const response = await authedFetch(url.toString(), { method: "POST" });
       if (!response.ok) {
         const errorText = await response.text();
         setMessages((prev) => [
@@ -590,7 +658,7 @@ export default function ChatApp() {
       try {
         const url = new URL(`${API_BASE}/topic`);
         url.searchParams.set("new_topic", topic);
-        const res = await fetch(url.toString(), { method: "POST" });
+        const res = await authedFetch(url.toString(), { method: "POST" });
         if (!res.ok) {
           const text = await res.text();
           appendSystem(`Topic update failed: ${text || res.statusText}`);
@@ -609,7 +677,7 @@ export default function ChatApp() {
       const sub = (args[0] || "").toLowerCase();
       if (sub === "new") {
         try {
-          const res = await fetch(`${API_BASE}/session`, { method: "POST" });
+          const res = await authedFetch(`${API_BASE}/session`, { method: "POST" });
           if (!res.ok) {
             const text = await res.text();
             appendSystem(`Session start failed: ${text || res.statusText}`);
@@ -637,7 +705,7 @@ export default function ChatApp() {
       try {
         const url = new URL(`${API_BASE}/summary`);
         url.searchParams.set("session_id", sessionId);
-        const res = await fetch(url.toString());
+        const res = await authedFetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
         appendSystem(`Summary failed: ${text || res.statusText}`);
@@ -662,7 +730,7 @@ export default function ChatApp() {
       try {
         const url = new URL(`${API_BASE}/search_topic`);
         url.searchParams.set("query", query);
-        const res = await fetch(url.toString());
+        const res = await authedFetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
           appendSystem(`Topic search failed: ${text || res.statusText}`);
@@ -697,7 +765,7 @@ export default function ChatApp() {
       try {
         const url = new URL(`${API_BASE}/search`);
         url.searchParams.set("query", query);
-        const res = await fetch(url.toString());
+        const res = await authedFetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
           appendSystem(`Search failed: ${text || res.statusText}`);
@@ -736,7 +804,7 @@ export default function ChatApp() {
       try {
         const url = new URL(`${API_BASE}/vectorsearch`);
         url.searchParams.set("query", query);
-        const res = await fetch(url.toString());
+        const res = await authedFetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
           appendSystem(`Vector search failed: ${text || res.statusText}`);
@@ -773,7 +841,7 @@ export default function ChatApp() {
       try {
         const url = new URL(`${API_BASE}/documentvectorsearch`);
         url.searchParams.set("query", query);
-        const res = await fetch(url.toString());
+        const res = await authedFetch(url.toString());
         if (!res.ok) {
           const text = await res.text();
           appendSystem(`Document vector search failed: ${text || res.statusText}`);
@@ -803,7 +871,7 @@ export default function ChatApp() {
 
     if (normalized === "all") {
       try {
-        const res = await fetch(`${API_BASE}/all`);
+        const res = await authedFetch(`${API_BASE}/all`);
         if (!res.ok) {
           const text = await res.text();
         appendSystem(`Fetch failed: ${text || res.statusText}`);
@@ -832,7 +900,7 @@ export default function ChatApp() {
 
     if (normalized === "reset") {
       try {
-        const res = await fetch(`${API_BASE}/reset`, { method: "POST" });
+        const res = await authedFetch(`${API_BASE}/reset`, { method: "POST" });
         if (!res.ok) {
           const text = await res.text();
         appendSystem(`Reset failed: ${text || res.statusText}`);
@@ -863,6 +931,40 @@ export default function ChatApp() {
     setShowSuggestions(false);
   };
 
+  if (authChecking) {
+    return (
+      <div className="app-loading-shell">
+        <div className="app-loading-card">
+          <p className="app-loading-label">Verifying session…</p>
+          <div className="app-loading-dots">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (pathNormalized === "/terms") {
+    return <TermsPage />;
+  }
+
+  if (!isAuthenticated) {
+    if (pathNormalized === "/signup") {
+      return (
+        <AuthShell title="AI Buddy" subtitle="Create your account">
+          <SignupForm onSubmit={handleSignup} />
+        </AuthShell>
+      );
+    }
+    return (
+      <AuthShell subtitle="Sign in to continue learning">
+        <LoginForm onSubmit={login} />
+      </AuthShell>
+    );
+  }
+
   return (
     <div className="chat-app">
       <div className="chat-shell">
@@ -890,13 +992,24 @@ export default function ChatApp() {
 
         <main className="chat-main">
           <header className="chat-header">
-            <div>
-              <h2 className="chat-header-title">AI Buddy</h2>
-              <p className="chat-header-subtitle">
-                Hi! I'm your AI study companion in a virtual world.
-              </p>
-            </div>
-          </header>
+          <div>
+            <h2 className="chat-header-title">AI Buddy</h2>
+            <p className="chat-header-subtitle">
+              Hi! I'm your AI study companion in a virtual world.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="primary-button logout-button"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+            title="Log out"
+          >
+            Logout
+          </button>
+        </header>
 
           <section className="message-list">
             {messages.map((message) => (
@@ -984,6 +1097,17 @@ export default function ChatApp() {
                 rows={Math.min(6, input.split("\n").length + 1)}
               />
 
+              <button
+                type="button"
+                className={`secondary-button chat-mic-button${isRecording ? " recording" : ""}`}
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isTranscribing}
+                title={isRecording ? "Stop recording" : "Start voice input"}
+                aria-label={isRecording ? "Stop recording" : "Start voice input"}
+              >
+                {isRecording ? "⏹️" : "🎤"}
+              </button>
+
               {/* {showSuggestions && filteredCommands.length > 0 && (
                 <div className="command-suggestions">
                   {filteredCommands.map((cmd) => (
@@ -1011,24 +1135,16 @@ export default function ChatApp() {
                 onClick={playLatestReply}
                 disabled={isPlaying || isSending || isTranscribing || !hasAssistantReply}
                 title="Play latest assistant reply"
+                aria-label="Play latest assistant reply"
               >
                 🔊
               </button>
               <button
                 type="button"
-                className="secondary-button"
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={isTranscribing}
-                title={isRecording ? "Stop recording" : "Start voice input"}
-                style={isRecording ? { backgroundColor: "#f87171", color: "#fff" } : undefined}
-              >
-                {isRecording ? "⏹️" : "🎤"}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
+                className="secondary-button chat-upload-button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading || isSending}
+                aria-label="Upload supporting documents"
               >
                 {isUploading ? "Uploading…" : "Upload Docs"}
               </button>

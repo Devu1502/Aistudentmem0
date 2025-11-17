@@ -16,7 +16,7 @@ class DocumentIngestionService:
     def __init__(self, document_store: DocumentStore) -> None:
         self.document_store = document_store
 
-    async def ingest(self, files: List[UploadFile]) -> Tuple[List[dict], List[dict]]:
+    async def ingest(self, files: List[UploadFile], user_id: str) -> Tuple[List[dict], List[dict]]:
         uploaded: List[dict] = []
         errors: List[dict] = []
 
@@ -32,11 +32,12 @@ class DocumentIngestionService:
                     "filename": file.filename,
                     "content_type": file.content_type,
                     "uploaded_at": datetime.utcnow().isoformat(),
+                    "user_id": user_id,
                 }
                 store_result = self.document_store.add_document(
                     file.filename or "Untitled",
                     text_content,
-                    metadata=metadata,
+                    metadataa=metadata,
                 )
                 uploaded.append(
                     {

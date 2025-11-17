@@ -1,13 +1,16 @@
 import { useCallback, useState } from "react";
 import { API_BASE } from "../apiConfig";
 
-export const useTeachMode = () => {
+const buildHeaders = (token?: string | null) =>
+  token ? { Authorization: `Bearer ${token}` } : undefined;
+
+export const useTeachMode = (token?: string | null) => {
   const [teachMode, setTeachMode] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const refreshTeachMode = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/teach_mode`);
+      const res = await fetch(`${API_BASE}/teach_mode`, { headers: buildHeaders(token) });
       if (!res.ok) {
         return;
       }
@@ -16,13 +19,16 @@ export const useTeachMode = () => {
     } catch (error) {
       console.error("Failed to load Teach Mode state", error);
     }
-  }, []);
+  }, [token]);
 
   const toggleTeachMode = useCallback(
     async (enabled: boolean) => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/teach_mode?enabled=${enabled}`, { method: "POST" });
+        const res = await fetch(`${API_BASE}/teach_mode?enabled=${enabled}`, {
+          method: "POST",
+          headers: buildHeaders(token),
+        });
         if (!res.ok) {
           const text = await res.text();
           throw new Error(text || res.statusText);
@@ -37,7 +43,7 @@ export const useTeachMode = () => {
         setLoading(false);
       }
     },
-    []
+    [token]
   );
 
   return {

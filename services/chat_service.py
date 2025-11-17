@@ -25,11 +25,11 @@ class ChatService:
         self.document_store = document_store
         self.context_builder = ContextBuilder(memory_store, document_store)
 
-    async def handle_chat(self, prompt: str, session_id: Optional[str]) -> Dict[str, str | int | bool | None]:
+    async def handle_chat(self, prompt: str, session_id: Optional[str], user_id: str) -> Dict[str, str | int | bool | None]:
         active_session = session_id or generate_session_id()
         teach_on = is_teach_mode_on()
 
-        context = self.context_builder.build(prompt, active_session, teach_on)
+        context = self.context_builder.build(prompt, active_session, teach_on, user_id)
 
         if teach_on:
             print("Teach Mode active - skipping chat history aggregation.")
@@ -52,8 +52,8 @@ class ChatService:
                 print("Document hits: none")
         # Combine all context elements before building final prompt
         combined_context = ""
-        if context.document_hits:
-            combined_context += "[Uploaded Document Context]\n" + "\n".join(context.document_hits) + "\n\n"
+        # if context.document_hits:
+        #     combined_context += "[Uploaded Document Context]\n" + "\n".join(context.document_hits) + "\n\n"
         if context.memory_hits:
             combined_context += "[Related Memories]\n" + "\n".join(context.memory_hits) + "\n\n"
         if context.chat_context:
@@ -96,7 +96,7 @@ class ChatService:
         reply_text, action_data = sanitize_reply(reply_text)
 
         if action_data:
-            sys_reply, _ = handle_system_action(action_data, active_session, self.memory_store)
+            sys_reply, _ = handle_system_action(action_data, active_session, self.memory_store, user_id)
             if sys_reply:
                 reply_text = sys_reply
                 silent = False
@@ -109,7 +109,7 @@ class ChatService:
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply_text}"
         self.memory_store.add(
             conversation_summary,
-            user_id="sree",
+            user_id=user_id,
             agent_id="general",
             run_id=active_session,
             metadata={"type": "short_term"},
@@ -120,10 +120,10 @@ class ChatService:
         user_entry = prompt if not self._is_context_block(prompt) else ""
         reply_entry = reply_text if not self._is_context_block(reply_text) else ""
         if user_entry or reply_entry:
-            chat_repository.insert_message(None, active_session, user_entry, reply_entry, timestamp)
-        session_repository.update_session_timestamps(None, active_session, timestamp)
+            chat_repository.insert_message(None, active_session, user_entry, reply_entry, timestamp, user_id)
+        session_repository.update_session_timestamps(None, active_session, timestamp, user_id)
 
-        self._maybe_queue_summary(context, active_session)
+        self._maybe_queue_summary(context, active_session, user_id)
 
         print("Chat record inserted successfully.")
 
@@ -178,7 +178,7 @@ class ChatService:
         sources_section = reply[idx:].strip()
         return main_response, sources_section
 
-    def _maybe_queue_summary(self, context: ContextResult, session_id: str) -> None:
+    def _maybe_queue_summary(self, context: ContextResult, session_id: str, user_id: str) -> None:
         turn_count = len(context.history_rows)
         token_count = count_tokens(context.chat_context)
         if turn_count == 0:
@@ -193,7 +193,7 @@ class ChatService:
         if not teacher_text and not student_text:
             return
 
-        asyncio.create_task(summarize_session(session_id, teacher_text, student_text))
+        asyncio.create_task(summarize_session(session_id, teacher_text, student_text, user_id))
 
     @staticmethod
     def _is_context_block(text: str) -> bool:

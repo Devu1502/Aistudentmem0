@@ -8,14 +8,17 @@ export type SessionInfo = {
   title?: string;
 };
 
-export const useSessions = () => {
+const buildHeaders = (token?: string | null) =>
+  token ? { Authorization: `Bearer ${token}` } : undefined;
+
+export const useSessions = (token?: string | null) => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetch(`${API_BASE}/sidebar_sessions`);
+      const res = await fetch(`${API_BASE}/sidebar_sessions`, { headers: buildHeaders(token) });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setSessions(Array.isArray(data.sessions) ? data.sessions : []);
@@ -26,22 +29,25 @@ export const useSessions = () => {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [token]);
 
   const deleteSession = useCallback(async (sessionId: string) => {
-    const res = await fetch(`${API_BASE}/delete_session?session_id=${sessionId}`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE}/delete_session?session_id=${sessionId}`, {
+      method: "DELETE",
+      headers: buildHeaders(token),
+    });
     if (!res.ok) throw new Error(await res.text());
     await fetchSessions();
-  }, [fetchSessions]);
+  }, [fetchSessions, token]);
 
   const renameSession = useCallback(async (sessionId: string, newTitle: string) => {
     const res = await fetch(
       `${API_BASE}/rename_session?session_id=${sessionId}&new_name=${encodeURIComponent(newTitle)}`,
-      { method: "POST" }
+      { method: "POST", headers: buildHeaders(token) }
     );
     if (!res.ok) throw new Error(await res.text());
     await fetchSessions();
-  }, [fetchSessions]);
+  }, [fetchSessions, token]);
 
   return {
     sessions,

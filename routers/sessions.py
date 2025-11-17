@@ -8,9 +8,10 @@ from openai import OpenAI
 
 from config.settings import settings
 from memory import LocalMemory
-from repositories import chat_repository, session_repository
+from repositories import session_repository
 from services.dependencies import get_memory_store
 from utils.ids import generate_session_id
+from services.auth_service import protect
 
 
 router = APIRouter()
@@ -18,12 +19,13 @@ openai_client = OpenAI()
 
 
 @router.get("/sidebar_sessions")
-def sidebar_sessions():
-    rows = session_repository.list_sessions(None)
+def sidebar_sessions(current_user: dict = Depends(protect)):
+    user_id = current_user["id"]
+    rows = session_repository.list_sessions(None, user_id)
     sessions = []
     for row in rows:
         session_id = row.get("session_id")
-        last_msg = session_repository.latest_message(None, session_id)
+        last_msg = session_repository.latest_message(None, session_id, user_id)
         preview = ""
         if last_msg:
             preview = last_msg.get("user_input") or last_msg.get("ai_output") or ""
@@ -39,21 +41,25 @@ def sidebar_sessions():
 
 
 @router.delete("/delete_session")
-def delete_session(session_id: str):
-    session_repository.delete_session(None, session_id)
+def delete_session(session_id: str, current_user: dict = Depends(protect)):
+    session_repository.delete_session(None, session_id, current_user["id"])
     return {"message": f"Session {session_id} deleted."}
 
 
 @router.post("/rename_session")
-def rename_session(session_id: str, new_name: str = Query(..., min_length=1)):
+def rename_session(
+    session_id: str,
+    new_name: str = Query(..., min_length=1),
+    current_user: dict = Depends(protect),
+):
     timestamp = datetime.utcnow().isoformat()
-    session_repository.rename_session(None, session_id, new_name.strip(), timestamp)
+    session_repository.rename_session(None, session_id, new_name.strip(), timestamp, current_user["id"])
     return {"message": f"Session {session_id} renamed."}
 
 
 @router.get("/session_messages")
-def session_messages(session_id: str):
-    rows = session_repository.fetch_session_messages(None, session_id)
+def session_messages(session_id: str, current_user: dict = Depends(protect)):
+    rows = session_repository.fetch_session_messages(None, session_id, current_user["id"])
     messages = []
     for row in rows:
         user_input = row.get("user_input")
@@ -67,30 +73,32 @@ def session_messages(session_id: str):
 
 
 @router.post("/session")
-def new_session(topic: str = "general"):
+def new_session(topic: str = "general", current_user: dict = Depends(protect)):
     session_id = generate_session_id()
     timestamp = datetime.utcnow().isoformat()
-    session_repository.rename_session(None, session_id, topic, timestamp)
+    session_repository.rename_session(None, session_id, topic, timestamp, current_user["id"])
     return {"session_id": session_id, "message": f"New session started for topic '{topic}'."}
 
 
 @router.post("/topic")
 def set_topic(
     new_topic: str = Query(..., description="New topic to store"),
-    user_id: str = "sree",
     session_id: Optional[str] = None,
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
     topic_text = new_topic.strip()
     session_ref = session_id or generate_session_id()
     memory_store.add(
         f"Topic switched to {topic_text}",
-        user_id=user_id,
+        user_id=current_user["id"],
         agent_id=topic_text,
         run_id=session_ref,
         metadata={"type": "system"},
     )
-    session_repository.rename_session(None, session_ref, topic_text, datetime.utcnow().isoformat())
+    session_repository.rename_session(
+        None, session_ref, topic_text, datetime.utcnow().isoformat(), current_user["id"]
+    )
     return {"message": f"Topic set to '{topic_text}'.", "session_id": session_ref}
 
 
@@ -98,8 +106,9 @@ def set_topic(
 def summarize_session(
     session_id: str = Query(..., description="Session to summarize"),
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
-    rows = session_repository.fetch_session_messages(None, session_id)
+    rows = session_repository.fetch_session_messages(None, session_id, current_user["id"])
 
     if not rows:
         return {"session_id": session_id, "summary": "No conversation found for this session."}
@@ -130,7 +139,7 @@ def summarize_session(
 
     memory_store.add(
         summary_text,
-        user_id="sree",
+        user_id=current_user["id"],
         agent_id="general",
         run_id=session_id,
         metadata={"type": "session_summary"},

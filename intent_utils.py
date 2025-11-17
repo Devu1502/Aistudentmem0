@@ -16,7 +16,7 @@ def sanitize_reply(reply: str) -> Tuple[str, Optional[str]]:
     return reply, action_data
 
 
-def handle_system_action(action: str, session_id: str, memory: LocalMemory):
+def handle_system_action(action: str, session_id: str, memory: LocalMemory, user_id: Optional[str] = None):
     """Execute a hidden system action and return a response + action type."""
     if not action:
         return None, None
@@ -25,11 +25,11 @@ def handle_system_action(action: str, session_id: str, memory: LocalMemory):
     val = value[0] if value else None
 
     if key == "topic":
-        update_topic(session_id, val or "general")
+        update_topic(session_id, val or "general", user_id=user_id)
         return f"Topic switched to {val or 'general'}.", "topic"
 
     if key == "session":
-        sid = start_session(val or "general")
+        sid = start_session(val or "general", user_id=user_id)
         return f"New session started ({sid})", "session"
 
     if key == "reset":
@@ -41,14 +41,14 @@ def handle_system_action(action: str, session_id: str, memory: LocalMemory):
 
 
 
-def update_topic(session_id: str, topic: str):
+def update_topic(session_id: str, topic: str, user_id: Optional[str] = None):
     timestamp = datetime.utcnow().isoformat()
-    session_repository.rename_session(None, session_id, topic, timestamp)
+    session_repository.rename_session(None, session_id, topic, timestamp, user_id or "")
 
 
-def start_session(topic: str = "general") -> str:
+def start_session(topic: str = "general", user_id: Optional[str] = None) -> str:
     sid = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    session_repository.rename_session(None, sid, topic, datetime.utcnow().isoformat())
+    session_repository.rename_session(None, sid, topic, datetime.utcnow().isoformat(), user_id or "")
     return sid
 
 

@@ -30,19 +30,20 @@ class ContextBuilder:
         prompt: str,
         session_id: str,
         teach_mode: bool,
+        user_id: str,
     ) -> ContextResult:
         if teach_mode:
             return ContextResult(chat_context="", history_rows=[], memory_hits=[], document_hits=[], session_summaries="")
 
-        history_rows = chat_repository.fetch_history(None, session_id)
+        history_rows = chat_repository.fetch_history(None, session_id, user_id)
         history_rows_limited = history_rows[-hyperparams.max_history_turns :]
         history_text = "\n".join(
             [f"Teacher: {row[0]}\nStudent: {row[1]}" for row in history_rows_limited if row]
         )
 
-        memory_hits = self._memory_hits(prompt, session_id)
-        doc_hits = self._document_hits(prompt)
-        summary_text = self._session_summaries()
+        memory_hits = self._memory_hits(prompt, session_id, user_id)
+        doc_hits = self._document_hits(prompt, user_id)
+        summary_text = self._session_summaries(user_id=user_id)
 
         unique_docs = list(dict.fromkeys(doc_hits))[: hyperparams.document_limit]
         memory_hits = memory_hits[: hyperparams.memory_limit]
@@ -61,10 +62,10 @@ class ContextBuilder:
             session_summaries=summary_text,
         )
 
-    def _memory_hits(self, prompt: str, session_id: str) -> List[str]:
+    def _memory_hits(self, prompt: str, session_id: str, user_id: str) -> List[str]:
         results = self.memory_store.search(
             query=prompt,
-            user_id="sree",
+            user_id=user_id,
             agent_id="general",
             run_id=session_id,
             limit=settings.vectors.chat_search_limit,
@@ -73,7 +74,7 @@ class ContextBuilder:
         if len(combined) < settings.vectors.chat_search_limit:
             global_hits = self.memory_store.search(
                 query=prompt,
-                user_id="sree",
+                user_id=user_id,
                 agent_id="general",
                 limit=settings.vectors.chat_search_limit,
             ).get("results", [])
@@ -92,8 +93,9 @@ class ContextBuilder:
                 hits.append(text)
         return hits
 
-    def _document_hits(self, prompt: str) -> List[str]:
-        results = self.document_store.search(prompt, limit=hyperparams.document_limit)
+    def _document_hits(self, prompt: str, user_id: str) -> List[str]:
+        filters = {"user_id": user_id}
+        results = self.document_store.search(prompt, limit=hyperparams.document_limit, filters=filters)
         doc_hits = results.get("results", []) if isinstance(results, dict) else []
         snippets = []
         for item in doc_hits[: hyperparams.document_limit]:
@@ -104,8 +106,8 @@ class ContextBuilder:
         return snippets
 
     @staticmethod
-    def _session_summaries(limit: int = hyperparams.summary_limit) -> str:
-        docs = fetch_recent_session_summaries(limit=limit)
+    def _session_summaries(limit: int = hyperparams.summary_limit, user_id: str | None = None) -> str:
+        docs = fetch_recent_session_summaries(limit=limit, user_id=user_id)
         if not docs:
             return ""
         blocks: List[str] = []

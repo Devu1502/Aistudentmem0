@@ -1,0 +1,193 @@
+session_id,user_id,teacher_summary,student_summary,created_at
+20251111-002829-119d1ee3,,"### Teacher Summary
+The session focused on Natural Language Processing (NLP), a branch of artificial intelligence that enables computers to comprehend and produce human language. Key applications discussed included virtual assistants like Siri and Google Assistant, which utilize NLP to analyze user input and generate responses.
+
+### Student Summary
+The student grasped that NLP involves understanding and generating human language, with applications in technologies like virtual assistants. They asked for clarification on the specific techniques used in NLP, indicating a desire to deepen their understanding of the subject.",,2025-11-11T00:49:23.657Z
+20251111-171618-cd5e9451,,"Teacher Summary
+- The teacher introduced the lesson focus: machine vision.
+- No substantive concepts or instructional content were delivered beyond identifying the topic.
+
+Student Summary
+- The student acknowledged understanding and restated the topic as machine vision.
+- No questions or uncertainties were expressed yet.",,2025-11-11T17:55:25.653Z
+20251111-171618-cd5e9451,,"Teacher Summary
+- Introduced the topic: machine vision
+- Highlighted its growing use in forensic science and in commercial applications related to firearms and ammunition
+
+Student Summary
+- Acknowledged understanding of the topic and its relevance to firearm forensics
+- Requested explanation of which specific machine vision techniques are commonly used in firearm forensics and what unique challenges these applications present",,2025-11-11T17:56:54.020Z
+20251111-171618-cd5e9451,,"Teacher Summary
+- Topic introduced: machine vision.
+- Key applications highlighted: forensic science and commercial applications related to firearms and ammunition.
+- Additional area mentioned for future instruction: culinary arts.
+
+Student Summary
+- Acknowledged topic: machine vision.
+- Noted applications: increasingly used in forensic science and firearm-related contexts.
+- Asked for specifics: what machine vision techniques are commonly used in firearm forensics and what unique challenges these applications present.",,2025-11-11T17:57:58.202Z
+20251111-180101-50a2b08e,,"Teacher Summary
+- Introduced the topic: machine vision.
+- Emphasized its growing use in forensic science and firearm-related applications.
+
+Student Summary
+- Reflection: acknowledged the topic and its relevance to forensic science and firearms.
+- Question: asked for explanation of which specific machine vision techniques are commonly used in firearm forensics and what unique challenges these applications present.",,2025-11-11T18:02:35.007Z
+20251111-180101-50a2b08e,,"Teacher Summary
+- Introduced the topic: machine vision.
+- Indicated a plan to switch the topic to Culinary arts.
+
+Student Summary
+- Noted that machine vision was introduced and mentioned its growing use in forensic science and firearm-related applications.
+- Asked a specific question about which machine vision techniques are used in firearm forensics and the unique challenges of those applications.
+- Observed that the topic then switched to Culinary arts.",,2025-11-11T18:03:24.056Z
+20251111-202927-630e5772,,"1. Teacher Summary – capture what was taught
+- No instructional content was taught. The session began with a greeting, and no topic or lesson was delivered.
+
+2. Student Summary – capture questions or understanding
+- The student returned the greeting and asked what topic to teach today, indicating a readiness to learn but no specific questions or content understood yet.",,2025-11-11T20:30:36.375Z
+20251111-202927-630e5772,,"1) Teacher Summary
+- Introduced the topic: culinary arts.
+- Stated an intention to teach about culinary arts.
+- No specific concepts or instructions were delivered yet; this was an introductory setup.
+
+2) Student Summary
+- Greeted and asked what topic would be taught.
+- Confirmed understanding that the topic is culinary arts.",,2025-11-11T20:31:34.526Z
+20251111-202927-630e5772,,"Teacher Summary
+- Introduced culinary arts as the topic.
+- Highlighted potential career paths: chef, food scientist, or manager in restaurants, hotels, or catering.
+- Noted that formal education provides the technical and business knowledge needed to succeed in the field.
+
+Student Summary
+- Acknowledged the topic and defined culinary arts as the art of food preparation, cooking, and presentation, blending creative and scientific skills to transform ingredients into dishes.
+- Asked about the core scientific principles that are most important for beginners to master in culinary arts.",,2025-11-11T20:39:44.255Z
+20251111-215217-93bbd4e9,,"Teacher Summary
+- The teacher introduced the topic and expressed intent to teach about agentic AI.
+
+Student Summary
+- The student acknowledged the topic switch to agentic AI; no questions or further understanding were recorded in this excerpt.",,2025-11-11T21:54:20.384Z
+20251111-215217-93bbd4e9,,"Teacher Summary
+- Introduced the concept of agentic AI.
+- Defined agentic AI as autonomous systems that can plan and act independently to achieve specific goals, without constant human oversight.
+
+Student Summary
+- Topic switch to agentic AI; restated the definition.
+- Asked how agentic AI handles goal selection when there are multiple objectives or conflicts between goals.",,2025-11-11T21:56:08.314Z
+20251111-215217-93bbd4e9,,"- Defined agentic AI as autonomous systems that can plan and act independently to achieve specific goals without constant human oversight.
+- Described core mechanisms for handling multiple or conflicting goals: prioritization frameworks, utility-based decision-making, hierarchical control architectures, and negotiation protocols in multi-agent systems.","- Reiterated the agentic AI definition.
+- Asked how goal selection works when there are multiple objectives or conflicts.
+- Requested practical details: how prioritization frameworks are selected in practice and how utility functions are defined for specific tasks.",2025-11-11T21:58:08.369Z
+20251111-220143-8e5a846b,,"Teacher Summary
+- The purpose of a prioritization framework is to help decide among multiple or conflicting goals by aligning actions with key guiding factors. These factors include business goals, available data, team culture, and the nature of the tasks. The idea is to use this alignment to select an appropriate prioritization approach for a concrete project, such as an agentic AI initiative.
+
+Student Summary
+- Understanding: Prioritization frameworks serve to pick among competing goals by mapping decisions to core factors (business goals, data availability, team culture, task nature).
+- Question/clarification: How should these factors be weighed in practice to choose a specific prioritization framework for a concrete agentic AI project?",,2025-11-11T22:07:15.712Z
+20251111-220143-8e5a846b,,"Teacher Summary
+- Focuses on two learning goals: the purposes of a prioritization framework and the basis for selecting among prioritization frameworks.
+
+Student Summary
+- Describes prioritization frameworks as tools to resolve multiple or conflicting goals by aligning actions with factors such as business goals, available data, team culture, and task nature.
+- Asks for practical guidance on how to weigh these factors to choose a specific prioritization framework for a concrete agentic AI project. Restates the selection basis as alignment with business goals, data, culture, and tasks.",,2025-11-11T22:09:16.877Z
+20251111-220143-8e5a846b,,"Teacher Summary – capture what was taught
+- Purposes of a prioritization framework: to help select among multiple or conflicting goals and guide actions toward core objectives.
+- Basis of selecting prioritization frameworks: alignment with business goals, available data, team culture, and the nature of the tasks at hand; consideration of how to weigh these factors in practice.
+- Syntax tree in propositional logic: a tree-structured representation of propositional formulas using logical connectives and operands, used to parse/evaluate logical expressions.
+
+Student Summary – capture questions or understanding
+- Student understanding:
+  - Prioritization frameworks help pick among goals by aligning actions with business goals, data, team culture, and task nature.
+  - Basis for selecting frameworks mirrors the same factors (business goals, data, culture, task nature).
+- Student questions/requests:
+  - How to weigh these factors in practice to choose a specific prioritization framework for a concrete agentic AI project.
+  - Should switch topic to propositional logic syntax trees or stay with algorithm analysis.",,2025-11-11T22:17:39.144Z
+20251111-220143-8e5a846b,,"Teacher Summary
+- The session covered four topics: the purposes of a prioritization framework; the basis for selecting among prioritization frameworks; the concept of a syntax tree in propositional logic; and understanding a document on phishing.
+- The teacher asked clarifying questions to elicit definitions and practical understanding of these topics.
+
+Student Summary
+- The student provided definitions for prioritization frameworks and their selection basis, and asked how to weigh those factors in practice for a concrete agentic AI project.
+- They asked whether to switch topics to propositional logic syntax trees or stay with algorithm analysis.
+- They defined phishing in terms of deceptive impersonation and signs of phishing, and asked how MFA protects against phishing in practice.",,2025-11-11T22:19:41.467Z
+20251111-223551-03c8c7a8,,"- Topic introduced: Photosynthesis.
+- Core idea shared: Photosynthesis is the process used by plants, algae, and some bacteria to convert light energy into chemical energy stored as glucose.","- Student input: None recorded.
+- Questions/understanding: N/A.",2025-11-11T22:38:06.037Z
+20251113-013519-2fbefeeb,,"1) Teacher Summary
+- The closest star to Earth is the Sun.
+
+2) Student Summary
+- No student input was provided (N/A); no questions or expressions of understanding were recorded.",,2025-11-13T01:36:33.591Z
+20251113-013519-2fbefeeb,,"Teacher Summary
+- Stated that the Sun is the closest star to Earth.
+- Included a prompt question, “Which is the closest star to us,” reinforcing the nearest-star concept.
+- Mentioned that the hottest stars in the universe are usually blue in color (blue stars = hotter).
+
+Student Summary
+- Acknowledged that the Sun is the closest star.
+- Asked how we determine that the Sun is the nearest star.
+- Inquired about the implications of the Sun’s proximity for our solar system.",,2025-11-13T01:52:19.697Z
+20251113-013519-2fbefeeb,,"Session: 20251113-013519-2fbefeeb
+
+1) Teacher Summary – what was taught
+- The closest star to us is the Sun.
+- Prompted for the student to recall the closest star.
+- Noted that the hottest stars in the universe are usually blue in color.
+- Asked, “What have you learned so far?” to gauge understanding.
+
+2) Student Summary – questions or understanding
+- Acknowledged that the Sun is the closest star and asked how we determine that, plus the implications for our solar system.
+- Greeted and asked what topic to learn about next, indicating openness to new instruction.",,2025-11-13T01:52:52.946Z
+20251113-013519-2fbefeeb,,"Teacher Summary
+- Taught that the closest star to Earth is the Sun.
+- Probed student understanding with questions like “What have you learned so far about the sun?”
+- Included a related astronomy fact: the hottest stars in the universe are usually blue in color.
+
+Student Summary
+- Expressed understanding that the Sun is the closest star to Earth.
+- Asked how we determine that the Sun is the closest star and what the implications are for our solar system.
+- Also engaged in the session by asking what topic to learn next and confirming what was learned so far.",,2025-11-13T01:53:51.443Z
+20251113-015700-da11faec,,"1. Teacher Summary – capture what was taught.
+- The teacher taught the claim that UY Scuti is the biggest star in our universe.
+
+2. Student Summary – capture questions or understanding.
+- The student indicated understanding of the topic and asked for explanation on how we determine that UY Scuti is the biggest star, and what measurements are used.",,2025-11-13T01:58:12.503Z
+20251113-040547-8d8873d6,,"Teacher Summary
+- Greeting exchanged; no instructional content delivered yet.
+
+Student Summary
+- Student returned the greeting and asked what topic to learn today, indicating readiness to learn.",,2025-11-13T04:07:21.196Z
+20251113-040547-8d8873d6,,"Teacher Summary
+- Topic taught: Security risks, with a focus on cloud safety.
+- Key points: Risks often come from user actions or overlooked settings rather than the technology itself.
+- Example cause: Misconfiguration, such as leaving storage buckets or databases open to the public.
+
+Student Summary
+- Interaction: Greeted, asked what topic to cover, and acknowledged the topic is security risks.
+- Understanding questions: Requested to choose a starting subtopic (e.g., ransomware, phishing) or another security risk to begin with.",,2025-11-13T04:10:33.584Z
+20251113-041323-a9099670,,"1) Teacher Summary
+- The lesson addressed common causes of cloud safety risks, emphasizing human factors rather than the technology itself.
+- Misconfiguration is a central example, such as leaving storage buckets or databases publicly accessible.
+- The discussion invites elaboration on other common misconfigurations and their mitigations.
+
+2) Student Summary
+- You understood that risks mainly arise from user actions or overlooked settings, not the core technology.
+- You cited misconfiguration (e.g., publicly exposed storage/databases) as a concrete example from the lesson.
+- You asked for explanations of other common cloud misconfigurations and how to mitigate them.",,2025-11-13T04:15:02.926Z
+20251113-041910-05db4156,,"Teacher Summary
+- Session cookies are small pieces of data stored by the browser to remember who you are during a site interaction.
+- If attackers steal these cookies, they can impersonate you and access accounts or sensitive data.
+- The session included a request to explain protections against cookie theft (HttpOnly, Secure, SameSite, MFA) and how they work together to prevent misuse.
+
+Student Summary
+- Understood that session cookies help a website remember you while you interact.
+- Recognized the risk that stolen cookies can lead to impersonation and data access.
+- Asked for an explanation of protections (HttpOnly, Secure, SameSite, MFA) and how they collaborate to prevent misuse.",,2025-11-13T04:21:32.434Z
+20251114-025121-e02e7a0f,,"Teacher Summary
+- Topic addressed: session cookies and cookie security.
+- Notable exchange: the teacher opened with a basic question, ""who are you?""; no further teaching content is shown in this snippet.
+
+Student Summary
+- Understanding: acknowledges that the current focus is on session cookies and cookie security.
+- Inquiry: asks to switch to a new topic and requests the topic name if switching.",,2025-11-14T02:53:26.368Z

@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from pydantic import BaseModel, EmailStr
+from bson import ObjectId
 
 from auth_config import auth_config
 from repositories.user_repository import UserRepository
@@ -138,3 +139,14 @@ def reset_password(payload: ResetPasswordRequest, request: Request):
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired token.")
     return {"message": "Password reset successful."}
+@router.post("/avatar")
+async def upload_avatar(request: Request, file: UploadFile = File(...), current_user: dict = Depends(protect)):
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file provided.")
+    db = request.app.state.mongo_db
+    db["users"].update_one(
+        {"_id": ObjectId(current_user["id"])},
+        {"$set": {"avatar": contents, "avatar_content_type": file.content_type}},
+    )
+    return {"message": "Avatar updated."}

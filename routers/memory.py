@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from memory import LocalMemory
 from services.dependencies import get_memory_store
+from services.auth_service import protect
 
 
 router = APIRouter()
@@ -12,12 +13,13 @@ router = APIRouter()
 @router.post("/add")
 def add_memory(
     text: str = Query(..., description="Content to store"),
-    user_id: str = "sree",
     topic: str = "general",
     session_id: str | None = None,
     memory_type: str = "short_term",
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
+    user_id = current_user["id"]
     session = session_id or "default"
     result = memory_store.add(
         text,
@@ -34,12 +36,13 @@ def add_memory(
 @router.get("/search")
 def search_memory(
     query: str,
-    user_id: str = "sree",
     topic: str | None = None,
     session_id: str | None = None,
     memory_type: str | None = None,
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
+    user_id = current_user["id"]
     filters = {}
     if memory_type:
         filters["type"] = memory_type
@@ -56,12 +59,12 @@ def search_memory(
 
 @router.get("/all")
 def get_all(
-    user_id: str = "sree",
     topic: str | None = None,
     session_id: str | None = None,
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
-    raw = memory_store.get_all(user_id=user_id, agent_id=topic, run_id=session_id)
+    raw = memory_store.get_all(user_id=current_user["id"], agent_id=topic, run_id=session_id)
     results = raw.get("results") if isinstance(raw, dict) else raw
     if results is None:
         results = []
@@ -74,6 +77,7 @@ def update_memory(
     memory_id: str,
     new_text: str,
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
     result = memory_store.update(memory_id=memory_id, data=new_text)
     return {"updated": result}
@@ -82,28 +86,31 @@ def update_memory(
 @router.delete("/delete")
 def delete_memory(
     memory_id: str | None = None,
-    user_id: str | None = None,
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
     if memory_id:
         memory_store.delete(memory_id=memory_id)
         return {"deleted_id": memory_id}
-    if user_id:
-        memory_store.delete_all(user_id=user_id)
-        return {"deleted_all_for_user": user_id}
-    return {"error": "Provide either memory_id or user_id"}
+    memory_store.delete_all(user_id=current_user["id"])
+    return {"deleted_all_for_user": current_user["id"]}
 
 
 @router.post("/reset")
-def reset_all(memory_store: LocalMemory = Depends(get_memory_store)):
+def reset_all(memory_store: LocalMemory = Depends(get_memory_store), current_user: dict = Depends(protect)):
     memory_store.reset()
     return {"message": "All memories reset"}
 
 
 @router.get("/search_topic")
-def search_topic(query: str = Query(..., description="Keyword to search"), limit: int = 5, memory_store: LocalMemory = Depends(get_memory_store)):
+def search_topic(
+    query: str = Query(..., description="Keyword to search"),
+    limit: int = 5,
+    memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
+):
     try:
-        results = memory_store.search(query=query, user_id="sree")
+        results = memory_store.search(query=query, user_id=current_user["id"])
     except Exception as search_err:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Vector search failed: {search_err}") from search_err
 
@@ -120,15 +127,19 @@ def search_topic(query: str = Query(..., description="Keyword to search"), limit
 
 
 @router.get("/search_history")
-def search_all(query: str = Query(...), user_id: str = "sree", memory_store: LocalMemory = Depends(get_memory_store)):
-    res = memory_store.search(query=query, user_id=user_id)
+def search_all(
+    query: str = Query(...),
+    memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
+):
+    res = memory_store.search(query=query, user_id=current_user["id"])
     return {"query": query, "results": res}
 
 
 @router.get("/inspect_memory")
-def inspect_memory(user_id: str = "sree", memory_store: LocalMemory = Depends(get_memory_store)):
-    short = memory_store.search(query="", user_id=user_id, filters={"type": "short_term"})
-    long = memory_store.search(query="", user_id=user_id, filters={"type": "long_term"})
+def inspect_memory(memory_store: LocalMemory = Depends(get_memory_store), current_user: dict = Depends(protect)):
+    short = memory_store.search(query="", user_id=current_user["id"], filters={"type": "short_term"})
+    long = memory_store.search(query="", user_id=current_user["id"], filters={"type": "long_term"})
     print("\nShort-term records:")
     for i, s in enumerate(short.get("results", [])):
         print(f"{i+1}. {s.get('memory')[:100]}")

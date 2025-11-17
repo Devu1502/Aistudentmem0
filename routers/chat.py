@@ -8,6 +8,7 @@ from intent_utils import detect_dev_command
 from memory import LocalMemory
 from services.chat_service import ChatService
 from services.dependencies import get_chat_service, get_memory_store
+from services.auth_service import protect
 
 
 router = APIRouter()
@@ -19,14 +20,16 @@ async def chat_endpoint(
     session_id: Optional[str] = Query(None),
     chat_service: ChatService = Depends(get_chat_service),
     memory_store: LocalMemory = Depends(get_memory_store),
+    current_user: dict = Depends(protect),
 ):
+    user_id = current_user.get("id")
     dev_cmd = detect_dev_command(prompt)
     if dev_cmd:
         if dev_cmd["cmd"] == "search_topic":
             query = dev_cmd.get("arg", "")
             if not query:
                 return {"response": "Provide a search query."}
-            results = memory_store.search(query=query, user_id="sree")
+            results = memory_store.search(query=query, user_id=user_id)
             hits = results.get("results", []) if isinstance(results, dict) else []
             formatted = []
             for idx, item in enumerate(hits[:5]):
@@ -42,4 +45,4 @@ async def chat_endpoint(
             memory_store.reset()
             return {"response": "Memory store reset successfully.", "context_count": 0, "session_id": session_id}
 
-    return await chat_service.handle_chat(prompt, session_id)
+    return await chat_service.handle_chat(prompt, session_id, user_id)
