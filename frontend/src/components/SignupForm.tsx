@@ -2,11 +2,10 @@ import React, { FormEvent, useState } from "react";
 import "./LoginForm.css";
 
 export type SignupFormValues = {
-  name?: string;
+  name: string;
   email: string;
   password: string;
   passwordConfirm: string;
-  acceptTerms: boolean;
 };
 
 type SignupFormProps = {
@@ -19,19 +18,18 @@ export const SignupForm = ({ onSubmit }: SignupFormProps) => {
     email: "",
     password: "",
     passwordConfirm: "",
-    acceptTerms: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleChange = (field: keyof SignupFormValues, value: string | boolean) => {
+  const handleChange = (field: keyof SignupFormValues, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!form.acceptTerms) {
-      setError("Please accept the Terms & Conditions.");
+    if (!form.name || !form.name.trim()) {
+      setError("Please enter your name.");
       return;
     }
     if (form.password !== form.passwordConfirm) {
@@ -50,12 +48,13 @@ export const SignupForm = ({ onSubmit }: SignupFormProps) => {
   return (
     <form className="login-form" onSubmit={handleSubmit}>
       <label className="login-field">
-        <span>Name (optional)</span>
+        <span>Name</span>
         <input
           type="text"
           placeholder="Ada Lovelace"
           value={form.name}
           onChange={(event) => handleChange("name", event.target.value)}
+          required
         />
       </label>
 
@@ -92,22 +91,6 @@ export const SignupForm = ({ onSubmit }: SignupFormProps) => {
           minLength={8}
           required
         />
-      </label>
-
-      <label className="login-field" style={{ flexDirection: "row", alignItems: "center", gap: "10px" }}>
-        <input
-          type="checkbox"
-          checked={form.acceptTerms}
-          onChange={(event) => handleChange("acceptTerms", event.target.checked)}
-          required
-        />
-        <span style={{ fontSize: "0.85rem" }}>
-          I agree to the{" "}
-          <a href="/terms" target="_blank" rel="noreferrer">
-            Terms & Conditions
-          </a>
-          .
-        </span>
       </label>
 
       {error && <p className="login-error">{error}</p>}

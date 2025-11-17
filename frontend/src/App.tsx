@@ -94,12 +94,6 @@ const createMessage = (role: MessageRole, text: string): Message => ({
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-const ROLE_META: Record<MessageRole, { label: string; initial: string }> = {
-  teacher: { label: "Teacher", initial: "T" },
-  student: { label: "Student", initial: "S" },
-  system: { label: "System", initial: "S" },
-};
-
 const TERMS_VERSION = "v1";
 
 export default function ChatApp() {
@@ -125,6 +119,21 @@ export default function ChatApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [teachStatus, setTeachStatus] = useState<TeachStatus>("idle");
+  const studentName = useMemo(() => {
+    const trimmed = user?.name?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : "You";
+  }, [user?.name]);
+  const studentInitial = useMemo(() => {
+    return studentName.charAt(0).toUpperCase();
+  }, [studentName]);
+  const roleMeta = useMemo<Record<MessageRole, { label: string; initial: string }>>(
+    () => ({
+      teacher: { label: studentName, initial: studentInitial },
+      student: { label: "AI Buddy", initial: "A" },
+      system: { label: "System", initial: "S" },
+    }),
+    [studentInitial, studentName]
+  );
 
   const authedFetch = useCallback(
     (input: RequestInfo | URL, init?: RequestInit) => {
@@ -141,11 +150,11 @@ export default function ChatApp() {
     async (values: SignupFormValues) => {
       try {
         const payload = {
-          name: values.name?.trim() || undefined,
+          name: values.name.trim(),
           email: values.email.trim().toLowerCase(),
           password: values.password,
           password_confirm: values.passwordConfirm,
-          accept_terms: values.acceptTerms,
+          accept_terms: true,
           terms_version: TERMS_VERSION,
         };
         const res = await fetch(`${API_BASE}/auth/signup`, {
@@ -1016,14 +1025,14 @@ export default function ChatApp() {
               <article
                 key={message.id}
                 className={`message-row ${message.role}`}
-                aria-label={`${ROLE_META[message.role].label} message`}
+                aria-label={`${roleMeta[message.role].label} message`}
               >
                 <div className={`message-avatar ${message.role}`}>
-                  {ROLE_META[message.role].initial}
+                  {roleMeta[message.role].initial}
                 </div>
                 <div className={`message-bubble ${message.role}`}>
                   <div className="message-meta">
-                    <span className="role">{ROLE_META[message.role].label}</span>
+                    <span className="role">{roleMeta[message.role].label}</span>
                     <span className="time">{formatTime(message.createdAt)}</span>
                   </div>
                   <div className="message-text">{message.text}</div>
@@ -1033,10 +1042,10 @@ export default function ChatApp() {
 
             {isSending && (
               <article className="message-row student typing" aria-live="polite">
-                <div className="message-avatar student">S</div>
+                <div className="message-avatar student">{roleMeta.student.initial}</div>
                 <div className="message-bubble student">
                   <div className="message-meta">
-                    <span className="role">Student</span>
+                    <span className="role">{roleMeta.student.label}</span>
                     <span className="time">…</span>
                   </div>
                   <div className={`typing-indicator ${teachMode ? "teach-mode" : ""}`}>
