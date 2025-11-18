@@ -1,3 +1,4 @@
+# Restore exported CSV data into the hosted Mongo Atlas cluster.
 import pandas as pd
 from pymongo import MongoClient
 

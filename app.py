@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+# Bring in the FastAPI toolkit plus the Mongo client and shared settings.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
 from config.settings import settings
 from routers import audio, auth, chat, documents, memory as memory_router, search, sessions, system
+# Force import search so its side effects (if any) run at startup.
 import routers.search  # <--- force ensure route registration
 
 
+# Build the FastAPI application that fronts the Mem0 system.
 app = FastAPI(title="Mem0 Local Memory System")
 
 
+# Let local dev origins call the API without CORS complaints.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -25,6 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Open a Mongo connection on startup and stash handy handles on app.state.
 @app.on_event("startup")
 def startup_db_client():
     mongo_client = MongoClient(settings.mongodb_uri)
@@ -39,6 +45,7 @@ def startup_db_client():
     reset_col.create_index("expires_at", expireAfterSeconds=0)
 
 
+# Close the Mongo client cleanly whenever the API shuts down.
 @app.on_event("shutdown")
 def shutdown_db_client():
     client = getattr(app.state, "mongo_client", None)
@@ -46,6 +53,7 @@ def shutdown_db_client():
         client.close()
 
 
+# Register each router so their endpoints become reachable.
 app.include_router(system.router)
 app.include_router(audio.router)
 app.include_router(chat.router)
@@ -56,6 +64,7 @@ app.include_router(memory_router.router)
 app.include_router(auth.router)
 
 
+# Lightweight root endpoint acts as a ping for operators.
 @app.get("/")
 def root():
     return {"message": "Mem0 + Ollama + Qdrant fully local memory server running"}

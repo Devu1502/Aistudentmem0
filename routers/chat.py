@@ -1,3 +1,4 @@
+# Chat router wires HTTP requests into the chat service orchestration.
 from __future__ import annotations
 
 from typing import Optional
@@ -15,6 +16,7 @@ router = APIRouter()
 
 
 @router.post("/chat")
+# Handle chat prompts, dev shortcuts, and dispatch to ChatService.
 async def chat_endpoint(
     prompt: str,
     session_id: Optional[str] = Query(None),
@@ -25,6 +27,7 @@ async def chat_endpoint(
     user_id = current_user.get("id")
     dev_cmd = detect_dev_command(prompt)
     if dev_cmd:
+        # Basic slash commands useful during development.
         if dev_cmd["cmd"] == "search_topic":
             query = dev_cmd.get("arg", "")
             if not query:

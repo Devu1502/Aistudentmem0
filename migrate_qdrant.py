@@ -18,11 +18,13 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from config.settings import settings
 
 
+# Local/remote connection defaults for the migration run.
 LOCAL_QDRANT_URL = os.getenv("LOCAL_QDRANT_URL", "http://localhost:6333")
 COLLECTIONS = ("mem0_local", "mem0_documents")
 SCROLL_BATCH_SIZE = 256
 
 
+# Make sure the destination cluster has a matching collection definition.
 def _ensure_remote_collection(local: QdrantClient, remote: QdrantClient, name: str) -> None:
     try:
         info = local.get_collection(name)
@@ -45,6 +47,7 @@ def _ensure_remote_collection(local: QdrantClient, remote: QdrantClient, name: s
         raise
 
 
+# Turn raw Qdrant scroll results into objects suited for upsert.
 def _convert_points(batch: Iterable) -> list[PointStruct]:
     converted: list[PointStruct] = []
     for point in batch:
@@ -58,6 +61,7 @@ def _convert_points(batch: Iterable) -> list[PointStruct]:
     return converted
 
 
+# Walk through one batch of the source collection.
 def _scroll_points(
     client: QdrantClient,
     collection: str,
@@ -73,6 +77,7 @@ def _scroll_points(
     return points, next_offset
 
 
+# Entry point that copies all points from local to remote clusters.
 def migrate() -> None:
     local = QdrantClient(url=LOCAL_QDRANT_URL, prefer_grpc=False)
     remote = QdrantClient(
@@ -109,4 +114,5 @@ def migrate() -> None:
 
 
 if __name__ == "__main__":
+    # Allow `python migrate_qdrant.py` to run the transfer.
     migrate()

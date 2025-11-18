@@ -1,3 +1,4 @@
+# Quick utility that exports a Qdrant collection into a CSV file.
 from qdrant_client import QdrantClient
 import csv
 

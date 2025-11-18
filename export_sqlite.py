@@ -1,3 +1,4 @@
+# Script for dumping chat/session tables from SQLite into CSV backups.
 import sqlite3
 import pandas as pd
 

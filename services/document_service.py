@@ -1,3 +1,4 @@
+# Handle uploaded documents by extracting text and storing embeddings.
 from __future__ import annotations
 
 import os
@@ -13,9 +14,11 @@ from doc_store import DocumentStore
 
 
 class DocumentIngestionService:
+    # Keep a handle to the vector-backed document store.
     def __init__(self, document_store: DocumentStore) -> None:
         self.document_store = document_store
 
+    # Process each user upload, capture text, and push it into Qdrant.
     async def ingest(self, files: List[UploadFile], user_id: str) -> Tuple[List[dict], List[dict]]:
         uploaded: List[dict] = []
         errors: List[dict] = []
@@ -51,6 +54,7 @@ class DocumentIngestionService:
 
         return uploaded, errors
 
+    # Pull text out of PDFs or plain-text files before indexing.
     def _extract_text(self, raw_bytes: bytes, suffix: str) -> str:
         ext = suffix.lower()
         if ext == ".pdf":

@@ -1,3 +1,4 @@
+# Export Qdrant vectors plus payload metadata into a CSV snapshot.
 import csv, json
 from qdrant_client import QdrantClient
 

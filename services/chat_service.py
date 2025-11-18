@@ -1,3 +1,4 @@
+# Service responsible for orchestrating LLM calls for each chat turn.
 from __future__ import annotations
 
 import asyncio
@@ -20,17 +21,20 @@ from utils.ids import generate_session_id
 
 
 class ChatService:
+    # Keep references to storage backends and helpers needed per request.
     def __init__(self, memory_store: LocalMemory, document_store: DocumentStore) -> None:
         self.memory_store = memory_store
         self.document_store = document_store
         self.context_builder = ContextBuilder(memory_store, document_store)
 
+    # Main entry point for handling a user prompt and returning an answer.
     async def handle_chat(self, prompt: str, session_id: Optional[str], user_id: str) -> Dict[str, str | int | bool | None]:
         active_session = session_id or generate_session_id()
         teach_on = is_teach_mode_on()
 
         context = self.context_builder.build(prompt, active_session, teach_on, user_id)
 
+        # Teach mode skips historical context and just prints debug info.
         if teach_on:
             print("Teach Mode active - skipping chat history aggregation.")
         else:
@@ -85,12 +89,15 @@ class ChatService:
         print(user_prompt)
         print("========== END FULL PROMPT ==========\n")
 
+        # Show a quick human-readable summary of what we sent downstream.
         self._print_context_outline(context)
 
+        # Ask the LangGraph agent to answer the teacher prompt.
         result = await Runner.run(chat_agent, user_prompt)
         raw_reply = getattr(result, "final_output", "") or ""
         print(f"Raw LLM reply: {raw_reply!r}")
 
+        # Clean up the reply, handle teach mode, and run system actions if needed.
         reply_text = self._prepare_reply(raw_reply, teach_on)
         silent = teach_on
         reply_text, action_data = sanitize_reply(reply_text)
@@ -106,6 +113,7 @@ class ChatService:
             print("Captured sources block from reply:")
             print(sources_block)
 
+        # Store a short-turn summary inside the memory store.
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply_text}"
         self.memory_store.add(
             conversation_summary,
@@ -119,10 +127,12 @@ class ChatService:
         timestamp = datetime.utcnow().isoformat()
         user_entry = prompt if not self._is_context_block(prompt) else ""
         reply_entry = reply_text if not self._is_context_block(reply_text) else ""
+        # Persist the chat turn and keep the session heartbeat fresh.
         if user_entry or reply_entry:
             chat_repository.insert_message(None, active_session, user_entry, reply_entry, timestamp, user_id)
         session_repository.update_session_timestamps(None, active_session, timestamp, user_id)
 
+        # Periodically trigger a background summary for lengthy sessions.
         self._maybe_queue_summary(context, active_session, user_id)
 
         print("Chat record inserted successfully.")
@@ -135,6 +145,7 @@ class ChatService:
         }
 
     @staticmethod
+    # Build the system prompt that wraps context, summaries, and instructions.
     def _compose_prompt(
         session_id: str,
         teach_on: bool,
@@ -160,6 +171,7 @@ class ChatService:
 
 
     @staticmethod
+    # Skip LLM output when teach mode is enabled; otherwise tidy the reply.
     def _prepare_reply(raw_reply: str, teach_on: bool) -> str:
         if teach_on:
             return ""
@@ -167,6 +179,7 @@ class ChatService:
         return reply if reply else "Agent returned no output."
 
     @staticmethod
+    # Separate any trailing "Sources:" block from the main answer text.
     def _split_sources_block(reply: str) -> tuple[str, str]:
         if not reply:
             return "", ""
@@ -196,6 +209,7 @@ class ChatService:
         asyncio.create_task(summarize_session(session_id, teacher_text, student_text, user_id))
 
     @staticmethod
+    # Ignore context scaffolding when deciding whether to log a message.
     def _is_context_block(text: str) -> bool:
         if not text:
             return False
@@ -210,6 +224,7 @@ class ChatService:
         return any(trimmed.startswith(prefix) for prefix in disallowed_prefixes)
 
     def _print_context_outline(self, context: ContextResult) -> None:
+        # Print a quick digest of each context slice for debugging.
         def preview_section(title: str, text: str, limit: int = 100) -> None:
             if not text:
                 print(f"⚪ {title}: None")

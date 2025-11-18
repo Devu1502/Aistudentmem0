@@ -1,3 +1,4 @@
+# Routes that let users upload and index supporting documents.
 from __future__ import annotations
 
 from typing import List
@@ -14,6 +15,7 @@ router = APIRouter()
 
 
 @router.post("/documents/upload")
+# Accept document uploads and hand them to DocumentIngestionService.
 async def upload_documents(
     files: List[UploadFile] = File(...),
     document_service: DocumentIngestionService = Depends(get_document_service),

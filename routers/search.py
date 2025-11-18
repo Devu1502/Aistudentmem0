@@ -1,3 +1,4 @@
+# Router exposing vector search endpoints for debugging/ops.
 from __future__ import annotations
 
 from typing import List, Dict, Any
@@ -14,6 +15,7 @@ router = APIRouter()
 
 
 def _annotate_results(results: List[Dict[str, Any]], source: str) -> List[Dict[str, Any]]:
+    # Tag each hit with its origin so the UI can distinguish memory vs docs.
     annotated: List[Dict[str, Any]] = []
     for item in results:
         annotated.append(
@@ -27,11 +29,13 @@ def _annotate_results(results: List[Dict[str, Any]], source: str) -> List[Dict[s
 
 
 def _score_value(item: Dict[str, Any]) -> float:
+    # Extract numeric scores while gracefully handling missing data.
     score = item.get("score")
     return float(score) if isinstance(score, (int, float)) else float("-inf")
 
 
 @router.get("/vectorsearch")
+# Search both personal memories and documents in one shot.
 def vector_search(
     query: str = Query(..., description="Text to search across chat memories and documents."),
     limit: int = Query(5, ge=1, le=50, description="Maximum number of results to retrieve from each source."),
@@ -56,6 +60,7 @@ def vector_search(
 
 
 @router.get("/documentvectorsearch")
+# Search only the uploaded document collection for a user.
 def document_vector_search(
     query: str = Query(..., description="Text to search within uploaded documents."),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of document matches to return."),

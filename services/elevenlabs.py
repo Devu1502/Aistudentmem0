@@ -1,3 +1,4 @@
+# ElevenLabs client wrapper for speech utilities.
 from __future__ import annotations
 
 from io import BytesIO
@@ -10,11 +11,14 @@ from dotenv import load_dotenv
 from elevenlabs import ElevenLabs
 
 
+# Standard module-level logger for diagnosing API failures.
 logger = logging.getLogger(__name__)
 
+# Load ElevenLabs secrets from the root .env file.
 dotenv_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
+# Spin up a reusable ElevenLabs client if the key exists.
 API_KEY = os.getenv("ELEVENLABS_API_KEY")
 if not API_KEY:
     logger.warning("ELEVENLABS_API_KEY not found at %s", dotenv_path.resolve())
@@ -28,9 +32,11 @@ else:
     else:
         logger.info("ElevenLabs API key loaded successfully")
 
+# Default voice fallback lets callers skip passing a voice id.
 DEFAULT_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "ztqW7U07ITK9TRp5iDUi")
 
 
+# Turn WebM audio bytes into text using the ElevenLabs model.
 def speech_to_text(audio: bytes, mime_type: str = "audio/webm") -> str:
     if not client:
         raise RuntimeError("ElevenLabs client not configured")
@@ -48,6 +54,7 @@ def speech_to_text(audio: bytes, mime_type: str = "audio/webm") -> str:
         raise
 
 
+# Generate spoken audio for a text snippet.
 def text_to_speech(text: str, voice_id: str | None = None) -> bytes:
     if not client:
         raise RuntimeError("ElevenLabs client not configured")
@@ -64,6 +71,7 @@ def text_to_speech(text: str, voice_id: str | None = None) -> bytes:
         raise
 
 
+# Stream spoken audio chunks as they are produced for low latency playback.
 def stream_text_to_speech(text: str, voice_id: str | None = None) -> Iterable[bytes]:
     if not client:
         raise RuntimeError("ElevenLabs client not configured")

@@ -1,3 +1,4 @@
+# Assemble conversation context from chat logs, docs, and summaries.
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from repositories import chat_repository
 from repositories.mongo_repository import fetch_recent_session_summaries
 
 
+# Simple container describing all context pieces returned to the LLM layer.
 @dataclass
 class ContextResult:
     chat_context: str
@@ -21,10 +23,12 @@ class ContextResult:
 
 
 class ContextBuilder:
+    # Inject the vector and document stores used across lookups.
     def __init__(self, memory_store: LocalMemory, document_store: DocumentStore) -> None:
         self.memory_store = memory_store
         self.document_store = document_store
 
+    # Build the combined context payload to guide the assistant.
     def build(
         self,
         prompt: str,
@@ -62,6 +66,7 @@ class ContextBuilder:
             session_summaries=summary_text,
         )
 
+    # Query personal memories related to the current prompt.
     def _memory_hits(self, prompt: str, session_id: str, user_id: str) -> List[str]:
         results = self.memory_store.search(
             query=prompt,
@@ -93,6 +98,7 @@ class ContextBuilder:
                 hits.append(text)
         return hits
 
+    # Look up relevant snippets in the uploaded document store.
     def _document_hits(self, prompt: str, user_id: str) -> List[str]:
         filters = {"user_id": user_id}
         results = self.document_store.search(prompt, limit=hyperparams.document_limit, filters=filters)
@@ -106,6 +112,7 @@ class ContextBuilder:
         return snippets
 
     @staticmethod
+    # Fetch short summaries of past sessions for additional background.
     def _session_summaries(limit: int = hyperparams.summary_limit, user_id: str | None = None) -> str:
         docs = fetch_recent_session_summaries(limit=limit, user_id=user_id)
         if not docs:

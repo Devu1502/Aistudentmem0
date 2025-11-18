@@ -20,6 +20,7 @@ import numpy as np
 import pytz
 from openai import OpenAI
 from qdrant_client import QdrantClient
+# qdrant_client primitives that drive the local vector store.
 from qdrant_client.models import (
     Distance,
     FieldCondition,
@@ -30,6 +31,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+# Standard logger for tracing vector store operations.
 logger = logging.getLogger(__name__)
 
 from config.settings import settings
@@ -75,6 +77,7 @@ class OpenAIEmbedder:
         return np.array(vector, dtype=np.float32)
 
 
+# Local Qdrant-backed store that follows the mem0 memory API.
 class LocalMemory:
     def __init__(
         self,
@@ -128,6 +131,7 @@ class LocalMemory:
                 return
             self._create_collection()
 
+    # Create the target collection when it does not already exist.
     def _create_collection(self) -> None:
         try:
             self.vector_store.create_collection(
@@ -145,6 +149,7 @@ class LocalMemory:
             raise
 
     @staticmethod
+    # Merge metadata from the caller with identity fields.
     def _merge_metadata(
         *,
         user_id: Optional[str],
@@ -164,16 +169,19 @@ class LocalMemory:
         return merged
 
     @staticmethod
+    # Detect permission errors so we know when to bail quietly.
     def _is_forbidden_error(exc: Exception) -> bool:
         message = str(exc).lower()
         return "forbidden" in message or "403" in message
 
     @staticmethod
+    # Some clusters lack payload indexes; switch to manual filtering then.
     def _needs_manual_filter(exc: Exception) -> bool:
         message = str(exc).lower()
         return "index required" in message or "payload index" in message
 
     @staticmethod
+    # Combine caller-supplied scope filters before hitting Qdrant.
     def _build_filters(
         *,
         user_id: Optional[str],
@@ -193,6 +201,7 @@ class LocalMemory:
         return filters
 
     @staticmethod
+    # Convert the simple dict filters into Qdrant Filter objects.
     def _to_qdrant_filter(filters: Dict[str, Any]) -> Optional[Filter]:
         if not filters:
             return None
@@ -210,6 +219,7 @@ class LocalMemory:
 
         return Filter(must=conditions) if conditions else None
 
+    # Produce timezone-aware timestamps for metadata fields.
     def _now(self) -> str:
         tz = pytz.timezone(self.time_zone)
         return datetime.now(tz).isoformat()
@@ -292,6 +302,7 @@ class LocalMemory:
 
         return {"results": formatted}
 
+    # Preferred pathway that delegates filtering to the vector DB.
     def _run_similarity_search(
         self,
         *,
@@ -343,6 +354,7 @@ class LocalMemory:
                 )
             raise
 
+    # Manual fallback used when payload indexes are missing.
     def _manual_filter_search(
         self,
         *,
@@ -373,6 +385,7 @@ class LocalMemory:
         return matched
 
     @staticmethod
+    # Evaluate whether a payload dict satisfies the requested filters.
     def _payload_matches(payload: Dict[str, Any], filters: Dict[str, Any]) -> bool:
         if not filters:
             return True

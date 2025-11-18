@@ -1,3 +1,4 @@
+# Helpers for parsing agent intents and lightweight dev commands.
 import re
 from datetime import datetime
 from typing import Optional, Tuple
@@ -39,13 +40,13 @@ def handle_system_action(action: str, session_id: str, memory: LocalMemory, user
     return None, None
 
 
-
-
+# Update the stored session topic and timestamp in Mongo.
 def update_topic(session_id: str, topic: str, user_id: Optional[str] = None):
     timestamp = datetime.utcnow().isoformat()
     session_repository.rename_session(None, session_id, topic, timestamp, user_id or "")
 
 
+# Create a fresh session id and register it for tracking.
 def start_session(topic: str = "general", user_id: Optional[str] = None) -> str:
     sid = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     session_repository.rename_session(None, sid, topic, datetime.utcnow().isoformat(), user_id or "")

@@ -1,10 +1,12 @@
+# Unit tests around the LocalMemory helper with dependency fallbacks.
 import unittest
 from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+# Try to load the optional runtime dependencies so tests can run locally.
 try:
     import numpy as np
-except ImportError:  
+except ImportError:
     np = None
 try:
     from qdrant_client.models import FieldCondition, Filter, MatchValue, PointIdsList, PointStruct
@@ -18,14 +20,14 @@ dependencies_ready = np is not None and qdrant_available
 
 if dependencies_ready:
     from memory import LocalMemory
-else: 
+else:
     LocalMemory = None
 
 
 if dependencies_ready:
 
+    # Deterministic embedder used so tests output predictable vectors.
     class DummyEmbedder:
-
         def __init__(self, dimension: int):
             self.dimension = dimension
 
@@ -34,9 +36,8 @@ if dependencies_ready:
             rng = np.random.default_rng(seed)
             return rng.random(self.dimension, dtype=np.float32)
 
-
+    # Minimal in-memory stub of the Qdrant client API.
     class FakeQdrantClient:
-
         def __init__(self):
             self._collections: Dict[str, Dict[str, Any]] = {}
 
@@ -161,6 +162,7 @@ if dependencies_ready:
 
 if dependencies_ready:
 
+    # Full test suite that exercises add/search/update/delete behavior.
     class LocalMemoryTests(unittest.TestCase):
         def setUp(self) -> None:
             self.embed_dim = 16
@@ -217,6 +219,7 @@ if dependencies_ready:
 
 else:
 
+    # If deps are missing, keep pytest happy with a skipped placeholder.
     class LocalMemoryTests(unittest.TestCase):
         @unittest.skip("numpy and qdrant-client are required for LocalMemory tests")
         def test_requires_numpy(self):
@@ -224,4 +227,5 @@ else:
 
 
 if __name__ == "__main__":
+    # Allow `python test_memory.py` to run the suite directly.
     unittest.main()

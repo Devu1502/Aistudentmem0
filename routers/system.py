@@ -1,3 +1,4 @@
+# System-level toggles and diagnostics.
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, Depends
@@ -11,11 +12,13 @@ router = APIRouter()
 
 
 @router.get("/teach_mode")
+# Report whether Teach Mode is currently enabled.
 def get_teach_mode(current_user: dict = Depends(protect)):
     return {"teach_mode": is_teach_mode_on()}
 
 
 @router.post("/teach_mode")
+# Flip Teach Mode on/off for the running process.
 def update_teach_mode(
     enabled: bool = Query(..., description="Enable or disable Teach Mode"),
     current_user: dict = Depends(protect),

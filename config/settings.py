@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Load environment variables from the .env file for local dev.
 load_dotenv()
 
 
@@ -59,5 +60,5 @@ class Settings:
     environment: str = os.getenv("APP_ENV", "local")
 
 
-# global settings
+# Instantiate a single settings object for the rest of the app to import.
 settings = Settings()

@@ -1,3 +1,4 @@
+# Service layer for issuing and fulfilling password reset requests.
 from __future__ import annotations
 
 import secrets
@@ -9,10 +10,12 @@ from services.auth_service import hash_password
 
 
 class PasswordResetService:
+    # Wire up repos so Mongo collections can be accessed easily.
     def __init__(self, db):
         self.user_repo = UserRepository(db)
         self.reset_repo = PasswordResetRepository(db)
 
+    # Issue a reset token link if the user exists.
     def request_reset(self, email: str) -> bool:
         user = self.user_repo.get_user_by_email(email)
         if not user:
@@ -24,6 +27,7 @@ class PasswordResetService:
         print(f"[PasswordReset] Send reset link to {email}: {reset_link}")
         return True
 
+    # Validate the token and swap the stored password hash.
     def reset_password(self, token: str, new_password: str) -> bool:
         record = self.reset_repo.get_valid_token(token)
         if not record:

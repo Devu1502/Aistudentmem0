@@ -1,3 +1,4 @@
+# Authentication helpers for hashing, JWT issuing, and route protection.
 from __future__ import annotations
 
 import re
@@ -10,28 +11,35 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 
+# Load app-specific auth config and Mongo repositories.
 from auth_config import auth_config
 from repositories.user_repository import UserRepository
 
+# Shared password hashing context uses Argon2.
 pwd_context = CryptContext(
     schemes=["argon2"],
     deprecated="auto"
 )
+
+# OAuth2 bearer tokens let FastAPI grab tokens automatically.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+# Hash a password before storing it in Mongo.
 def hash_password(password: str) -> str:
     # bcrypt requires <= 72 bytes
     password_bytes = password.encode("utf-8")[:72]
     return pwd_context.hash(password_bytes)
 
 
+# Compare a candidate password to a stored hash.
 def verify_password(password: str, hashed_password: str) -> bool:
     # bcrypt verification must use same truncation
     password_bytes = password.encode("utf-8")[:72]
     return pwd_context.verify(password_bytes, hashed_password)
 
 
+# Enforce basic password complexity requirements.
 def validate_password_strength(password: str) -> None:
     if len(password) < auth_config.password_min_length:
         raise HTTPException(
@@ -48,6 +56,7 @@ def validate_password_strength(password: str) -> None:
         raise HTTPException(status_code=400, detail="Password must include at least one special character.")
 
 
+# Issue a short-lived JWT for authenticated users.
 def create_access_token(subject: str, additional_claims: Optional[Dict[str, Any]] = None) -> str:
     expire = datetime.utcnow() + timedelta(minutes=auth_config.jwt_expiry_minutes)
     payload: Dict[str, Any] = {
@@ -60,6 +69,7 @@ def create_access_token(subject: str, additional_claims: Optional[Dict[str, Any]
     return jwt.encode(payload, auth_config.jwt_secret_key, algorithm=auth_config.jwt_algorithm)
 
 
+# Decode and validate a bearer token, raising HTTP errors when invalid.
 def verify_token(token: str) -> Dict[str, Any]:
     try:
         return jwt.decode(token, auth_config.jwt_secret_key, algorithms=[auth_config.jwt_algorithm])
@@ -69,6 +79,7 @@ def verify_token(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
 
+# Dependency that ensures a valid user is attached to the request state.
 async def protect(request: Request, token: str = Depends(oauth2_scheme)):
     payload = verify_token(token)
     user_id = payload.get("sub")
@@ -85,6 +96,7 @@ async def protect(request: Request, token: str = Depends(oauth2_scheme)):
     return sanitized
 
 
+# Limit access to specific roles by wrapping the protect dependency.
 def restrict_to(allowed_roles: List[str]):
     async def dependency(current_user: Dict[str, Any] = Depends(protect)):
         role = current_user.get("role", "user")

@@ -1,3 +1,4 @@
+# Audio endpoints that expose ElevenLabs speech-to-text/text-to-speech.
 from __future__ import annotations
 
 import logging
@@ -15,6 +16,7 @@ from services.elevenlabs import (
 )
 
 
+# Standard FastAPI logger plus APIRouter for grouping audio routes.
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -28,6 +30,7 @@ class TTSRequest(BaseModel):
 SpeechToTextHandler = Callable[[bytes, str], str]
 StreamTextToSpeechHandler = Callable[[str, str | None], Iterable[bytes]]
 
+# Pick handlers only if the ElevenLabs client initialized successfully.
 speech_to_text_handler: SpeechToTextHandler | None = (
     elevenlabs_speech_to_text if elevenlabs_client else None
 )
@@ -37,6 +40,7 @@ stream_text_to_speech_handler: StreamTextToSpeechHandler | None = (
 
 
 @router.post("/stt")
+# Convert uploaded audio into text using ElevenLabs STT.
 async def transcribe_audio(file: UploadFile = File(...)) -> dict[str, str]:
     if not speech_to_text_handler:
         raise HTTPException(status_code=500, detail="Speech-to-text unavailable")
@@ -55,6 +59,7 @@ async def transcribe_audio(file: UploadFile = File(...)) -> dict[str, str]:
 
 
 @router.post("/tts")
+# Stream synthesised speech back to the caller.
 async def synthesize_speech(payload: TTSRequest) -> StreamingResponse:
     if not stream_text_to_speech_handler:
         raise HTTPException(status_code=500, detail="TTS unavailable")

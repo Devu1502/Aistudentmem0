@@ -1,3 +1,4 @@
+# Session management endpoints for listing, renaming, and summarizing chats.
 from __future__ import annotations
 
 from datetime import datetime
@@ -19,6 +20,7 @@ openai_client = OpenAI()
 
 
 @router.get("/sidebar_sessions")
+# Provide the sidebar with session previews and timestamps.
 def sidebar_sessions(current_user: dict = Depends(protect)):
     user_id = current_user["id"]
     rows = session_repository.list_sessions(None, user_id)
@@ -41,12 +43,14 @@ def sidebar_sessions(current_user: dict = Depends(protect)):
 
 
 @router.delete("/delete_session")
+# Remove a session and its records from Mongo.
 def delete_session(session_id: str, current_user: dict = Depends(protect)):
     session_repository.delete_session(None, session_id, current_user["id"])
     return {"message": f"Session {session_id} deleted."}
 
 
 @router.post("/rename_session")
+# Allow the frontend to rename a session tab.
 def rename_session(
     session_id: str,
     new_name: str = Query(..., min_length=1),
@@ -58,6 +62,7 @@ def rename_session(
 
 
 @router.get("/session_messages")
+# Return the formatted chat transcript for playback.
 def session_messages(session_id: str, current_user: dict = Depends(protect)):
     rows = session_repository.fetch_session_messages(None, session_id, current_user["id"])
     messages = []
@@ -73,6 +78,7 @@ def session_messages(session_id: str, current_user: dict = Depends(protect)):
 
 
 @router.post("/session")
+# Create a brand new session with a generated id.
 def new_session(topic: str = "general", current_user: dict = Depends(protect)):
     session_id = generate_session_id()
     timestamp = datetime.utcnow().isoformat()
@@ -81,6 +87,7 @@ def new_session(topic: str = "general", current_user: dict = Depends(protect)):
 
 
 @router.post("/topic")
+# Persist a topic change and record it as a system memory.
 def set_topic(
     new_topic: str = Query(..., description="New topic to store"),
     session_id: Optional[str] = None,
@@ -103,6 +110,7 @@ def set_topic(
 
 
 @router.get("/summary")
+# Generate and store a short OpenAI summary for a session.
 def summarize_session(
     session_id: str = Query(..., description="Session to summarize"),
     memory_store: LocalMemory = Depends(get_memory_store),

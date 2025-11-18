@@ -1,3 +1,4 @@
+# Async helper to create OpenAI-driven session summaries.
 from __future__ import annotations
 
 import asyncio
@@ -9,12 +10,15 @@ from openai import OpenAI
 from config.settings import settings
 from repositories.mongo_repository import insert_session_summary
 
+# Reuse one OpenAI client for all summarization calls.
 _client = OpenAI()
 
 
+# Kick off a background summary generation and persistence task.
 async def summarize_session(session_id: str, teacher_text: str, student_text: str, user_id: str) -> None:
     """Generate and store a compact summary for the session."""
 
+    # Run the actual network call on a thread to avoid blocking FastAPI.
     def _run() -> Tuple[str, str]:
         if not teacher_text and not student_text:
             return "", ""
@@ -48,6 +52,7 @@ async def summarize_session(session_id: str, teacher_text: str, student_text: st
     teacher_summary, student_summary = await asyncio.to_thread(_run)
     if not (teacher_summary or student_summary):
         return
+    # Store the results so dashboards can surface them later.
     insert_session_summary(
         session_id=session_id,
         teacher_summary=teacher_summary,

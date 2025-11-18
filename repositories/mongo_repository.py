@@ -1,3 +1,4 @@
+# Mongo persistence helpers shared by services and routers.
 from __future__ import annotations
 
 import os
@@ -18,6 +19,7 @@ session_collection = db["sessions"]
 summary_collection = db["session_summaries"]
 
 
+# Convert incoming ids to ObjectId when possible.
 def _normalize_user_id(user_id: str | ObjectId | None) -> Optional[ObjectId]:
     if not user_id:
         return None
@@ -29,6 +31,7 @@ def _normalize_user_id(user_id: str | ObjectId | None) -> Optional[ObjectId]:
         return None
 
 
+# Ensure indexes exist for speedy lookups on page load.
 def _ensure_indexes() -> None:
     chat_collection.create_index([("session_id", ASCENDING), ("timestamp", DESCENDING)])
     chat_collection.create_index([("session_id", ASCENDING), ("user_id", ASCENDING)])
@@ -49,6 +52,7 @@ def insert_message(
     timestamp: Optional[str] = None,
     user_id: Optional[str | ObjectId] = None,
 ) -> Dict[str, Any]:
+    # Save a single chat turn into Mongo for future replay.
     ts = timestamp or datetime.utcnow().isoformat()
     doc = {
         "session_id": session_id,
@@ -64,6 +68,7 @@ def insert_message(
 
 
 def fetch_history(session_id: str, user_id: Optional[str | ObjectId], limit: int = 50) -> List[tuple[str, str]]:
+    # Return the last N conversational turns for a session.
     filters: Dict[str, Any] = {"session_id": session_id}
     normalized = _normalize_user_id(user_id)
     if normalized:
@@ -80,6 +85,7 @@ def fetch_history(session_id: str, user_id: Optional[str | ObjectId], limit: int
 
 
 def update_session_timestamps(session_id: str, timestamp: str, user_id: Optional[str | ObjectId]) -> None:
+    # Touch the session record to keep created/updated fields current.
     normalized = _normalize_user_id(user_id)
     session_collection.update_one(
         {"session_id": session_id, "user_id": normalized},
@@ -96,6 +102,7 @@ def update_session_timestamps(session_id: str, timestamp: str, user_id: Optional
 
 
 def rename_session(session_id: str, new_title: str, timestamp: str, user_id: Optional[str | ObjectId]) -> None:
+    # Rename an existing session, creating it if it does not exist yet.
     normalized = _normalize_user_id(user_id)
     session_collection.update_one(
         {"session_id": session_id, "user_id": normalized},
@@ -113,6 +120,7 @@ def rename_session(session_id: str, new_title: str, timestamp: str, user_id: Opt
 
 
 def delete_session(session_id: str, user_id: Optional[str | ObjectId]) -> None:
+    # Drop a session and all associated chat/summary data.
     normalized = _normalize_user_id(user_id)
     filter_query = {"session_id": session_id}
     if normalized:
@@ -123,6 +131,7 @@ def delete_session(session_id: str, user_id: Optional[str | ObjectId]) -> None:
 
 
 def _clean_numeric(doc: Dict[str, Any]) -> Dict[str, Any]:
+    # Replace NaN/inf floats so JSON serialization stays safe.
     for key, value in list(doc.items()):
         if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
             doc[key] = None
@@ -130,6 +139,7 @@ def _clean_numeric(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def list_sessions(user_id: Optional[str | ObjectId]) -> List[Dict[str, Any]]:
+    # Pull sessions plus last_activity timestamps for a user.
     normalized = _normalize_user_id(user_id)
     query = {"user_id": normalized} if normalized else {}
     sessions = {doc["session_id"]: doc for doc in session_collection.find(query, {"_id": 0}) if "session_id" in doc}
@@ -161,6 +171,7 @@ def list_sessions(user_id: Optional[str | ObjectId]) -> List[Dict[str, Any]]:
 
 
 def latest_message(session_id: str, user_id: Optional[str | ObjectId]) -> Optional[Dict[str, Any]]:
+    # Fetch the newest message pair for summary cards.
     filters = {"session_id": session_id}
     normalized = _normalize_user_id(user_id)
     if normalized:
@@ -172,6 +183,7 @@ def latest_message(session_id: str, user_id: Optional[str | ObjectId]) -> Option
 
 
 def fetch_session_messages(session_id: str, user_id: Optional[str | ObjectId]) -> List[Dict[str, Any]]:
+    # Return the entire saved conversation for a given session.
     filters = {"session_id": session_id}
     normalized = _normalize_user_id(user_id)
     if normalized:
@@ -187,6 +199,7 @@ def insert_session_summary(
     user_id: Optional[str | ObjectId],
     created_at: Optional[datetime] = None,
 ) -> None:
+    # Store asynchronously generated teacher/student summaries.
     normalized = _normalize_user_id(user_id)
     summary_doc = {
         "session_id": session_id,
@@ -199,6 +212,7 @@ def insert_session_summary(
 
 
 def fetch_recent_session_summaries(limit: int = 2, user_id: Optional[str | ObjectId] = None) -> List[Dict[str, Any]]:
+    # Provide the latest summaries so the chat agent can reference them.
     filters = {}
     normalized = _normalize_user_id(user_id)
     if normalized:

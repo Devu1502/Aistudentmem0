@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# Authentication router covering signup, login, and password management.
 from datetime import datetime
 from typing import Optional
 
@@ -23,26 +24,31 @@ from services.password_reset_service import PasswordResetService
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+# Response schema returned to clients on successful login.
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
 
+# Payload for requesting a password reset email.
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 
+# Input needed to confirm a password reset.
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
     confirm_password: str
 
 
+# Simple profile update payload for PATCH /me.
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
+# Create a new user after validating passwords and terms.
 def signup(payload: CreateUser, request: Request):
     db = request.app.state.mongo_db
     user_repo = UserRepository(db)
@@ -82,6 +88,7 @@ def signup(payload: CreateUser, request: Request):
 
 
 @router.post("/login", response_model=TokenResponse)
+# Validate credentials and issue a JWT.
 def login(payload: LoginUser, request: Request):
     db = request.app.state.mongo_db
     user_repo = UserRepository(db)
@@ -94,11 +101,13 @@ def login(payload: LoginUser, request: Request):
 
 
 @router.get("/me")
+# Show the current authenticated user.
 def get_me(current_user: dict = Depends(protect)):
     return {"user": current_user}
 
 
 @router.patch("/me")
+# Allow users to update simple profile fields.
 def update_me(payload: UpdateProfileRequest, request: Request, current_user: dict = Depends(protect)):
     db = request.app.state.mongo_db
     user_repo = UserRepository(db)
@@ -114,6 +123,7 @@ def update_me(payload: UpdateProfileRequest, request: Request, current_user: dic
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+# Permanently delete the authenticated account.
 def delete_me(request: Request, current_user: dict = Depends(protect)):
     db = request.app.state.mongo_db
     user_repo = UserRepository(db)
@@ -122,6 +132,7 @@ def delete_me(request: Request, current_user: dict = Depends(protect)):
 
 
 @router.post("/forgot-password")
+# Trigger a password-reset email if the user exists.
 def forgot_password(payload: ForgotPasswordRequest, request: Request):
     service = PasswordResetService(request.app.state.mongo_db)
     service.request_reset(payload.email.lower())
@@ -129,6 +140,7 @@ def forgot_password(payload: ForgotPasswordRequest, request: Request):
 
 
 @router.post("/reset-password")
+# Finalize a password reset using the emailed token.
 def reset_password(payload: ResetPasswordRequest, request: Request):
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match.")
@@ -139,6 +151,7 @@ def reset_password(payload: ResetPasswordRequest, request: Request):
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired token.")
     return {"message": "Password reset successful."}
+# Store an uploaded avatar blob directly in Mongo.
 @router.post("/avatar")
 async def upload_avatar(request: Request, file: UploadFile = File(...), current_user: dict = Depends(protect)):
     contents = await file.read()

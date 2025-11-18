@@ -1,3 +1,4 @@
+// Frontend entry point that wires up chat, sessions, and audio helpers.
 import React, { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
@@ -28,9 +29,11 @@ type CommandDefinition = {
   description: string;
 };
 
+// Speech endpoints exposed by the FastAPI backend.
 const STT_URL = `${API_BASE}/stt`;
 const TTS_URL = `${API_BASE}/tts`;
 
+// Handy slash commands surfaced in the command palette.
 const COMMANDS: CommandDefinition[] = [
   {
     name: "topic",
@@ -84,6 +87,7 @@ const COMMANDS: CommandDefinition[] = [
   },
 ];
 
+// Helper to stamp messages with ids/timestamps before rendering.
 const createMessage = (role: MessageRole, text: string): Message => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   role,
@@ -91,12 +95,15 @@ const createMessage = (role: MessageRole, text: string): Message => ({
   createdAt: new Date().toISOString(),
 });
 
+// Format timestamps for message metadata display.
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+// Ensure signup requests accept the currently published terms.
 const TERMS_VERSION = "v1";
 
 export default function ChatApp() {
+  // Core chat state covers message log, auth, sessions, and audio flows.
   const [messages, setMessages] = useState<Message[]>(() => [
     createMessage("system", "Welcome! Let's start when you're ready to teach."),
   ]);
@@ -119,6 +126,7 @@ export default function ChatApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [teachStatus, setTeachStatus] = useState<TeachStatus>("idle");
+  // Compute display labels/initials for the teacher and AI buddy.
   const studentName = useMemo(() => {
     const trimmed = user?.name?.trim();
     return trimmed && trimmed.length > 0 ? trimmed : "You";
@@ -135,6 +143,7 @@ export default function ChatApp() {
     [studentInitial, studentName]
   );
 
+  // Wrap fetch so every request automatically carries the auth token.
   const authedFetch = useCallback(
     (input: RequestInfo | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers || {});
@@ -146,6 +155,7 @@ export default function ChatApp() {
     [token]
   );
 
+  // Create an account and immediately log the user in.
   const handleSignup = useCallback(
     async (values: SignupFormValues) => {
       try {
@@ -182,16 +192,19 @@ export default function ChatApp() {
     [login]
   );
 
+  // Track DOM nodes and browser primitives needed for scrolling/audio.
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const initialisedRef = useRef(false);
   const teachStatusTimeoutRef = useRef<number | null>(null);
 
+  // Append helper text from local actions or command responses.
   const pushSystemMessage = useCallback((text: string) => {
     setMessages((prev) => [...prev, createMessage("system", text)]);
   }, []);
 
+  // Load a saved conversation and hydrate the chat panel.
   const handleSelectSession = useCallback(
     async (selectedSessionId: string) => {
       try {
@@ -215,6 +228,11 @@ export default function ChatApp() {
     [authedFetch, pushSystemMessage]
   );
 
+  // Scroll to the bottom whenever messages change.
+  // After login, fetch Teach Mode status and initial sessions.
+  // Reset initialization flags when signing out.
+  // Clear pending teach mode timers on unmount.
+  // When Teach Mode toggles, refresh the status indicator.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSending]);
@@ -245,6 +263,7 @@ export default function ChatApp() {
     }
   }, [isAuthenticated]);
 
+  // Filter slash commands when the palette is visible.
   const filteredCommands = useMemo(() => {
     if (!showSuggestions) {
       return [];
@@ -258,6 +277,7 @@ export default function ChatApp() {
     );
   }, [commandQuery, showSuggestions]);
 
+  // Remember the most recent assistant reply for playback options.
   const latestAssistantMessage = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -270,11 +290,13 @@ export default function ChatApp() {
 
   const hasAssistantReply = Boolean(latestAssistantMessage);
 
+  // Utility that hides and resets the autocomplete overlay.
   const closeCommandPalette = () => {
     setShowSuggestions(false);
     setCommandQuery("");
   };
 
+  // Toggle teach mode and show feedback to the user.
   const handleToggleTeachMode = useCallback(async () => {
     const success = await toggleTeachMode(!teachMode);
     if (success) {
@@ -284,6 +306,7 @@ export default function ChatApp() {
     }
   }, [teachMode, toggleTeachMode, pushSystemMessage]);
 
+  // Upload supporting documents to the backend ingestion route.
   const handleFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const fileList = event.target.files;
     if (!fileList || fileList.length === 0) {
@@ -336,6 +359,7 @@ export default function ChatApp() {
     }
   };
 
+  // Remove a chat thread and fall back to a fresh system message.
   const handleDeleteSession = useCallback(async (sessionIdToDelete: string) => {
     if (!window.confirm("Delete this chat permanently?")) return;
     try {
@@ -355,6 +379,7 @@ export default function ChatApp() {
     }
   }, [deleteSession, pushSystemMessage, sessionId]);
 
+  // Persist the edited title then clear edit state.
   const handleRenameSession = useCallback(async (sessionId: string) => {
     if (!newTitle.trim()) {
       pushSystemMessage("Provide a new title before saving.");
@@ -370,16 +395,19 @@ export default function ChatApp() {
     }
   }, [newTitle, pushSystemMessage, renameSession]);
 
+  // Initialize inline session rename mode.
   const handleStartRename = useCallback((sessionId: string, currentTitle: string) => {
     setEditingSession(sessionId);
     setNewTitle(currentTitle);
   }, []);
 
+  // Exit rename mode without saving.
   const handleRenameCancel = useCallback(() => {
     setEditingSession(null);
     setNewTitle("");
   }, []);
 
+  // Capture microphone audio and send it to the STT endpoint.
   const startRecording = async () => {
     if (isRecording || isTranscribing) {
       return;
@@ -444,6 +472,7 @@ export default function ChatApp() {
     }
   };
 
+  // Stop the recording session and clean up MediaRecorder refs.
   const stopRecording = () => {
     const recorder = recorderRef.current;
     if (!recorder) {
@@ -454,6 +483,7 @@ export default function ChatApp() {
     recorderRef.current = null;
   };
 
+  // Convert the latest assistant message into audio playback.
   const playLatestReply = async () => {
     if (isPlaying || isSending || isTranscribing) {
       return;
@@ -529,6 +559,7 @@ export default function ChatApp() {
     }
   }, [teachMode, teachStatus]);
 
+  // Track textarea changes and trigger the command palette when needed.
   const handleInputChange = (value: string) => {
     setInput(value);
     if (value.startsWith("/")) {
@@ -541,6 +572,7 @@ export default function ChatApp() {
     }
   };
 
+  // Reset the chat panel to an empty state.
   const handleNewChat = () => {
     setMessages([createMessage("system", "Hello! I am ready to learn.")]);
     setSessionId(null);
@@ -548,6 +580,7 @@ export default function ChatApp() {
     closeCommandPalette();
   };
 
+  // Decide whether input is a slash command or a prompt for the agent.
   const processInput = async (rawInput: string) => {
     const trimmed = rawInput.trim();
     if (!trimmed) return;
@@ -564,11 +597,13 @@ export default function ChatApp() {
     await sendPrompt(trimmed);
   };
 
+  // Form submit handler that pipes text into processInput.
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     await processInput(input);
   };
 
+  // Send the teacher prompt to the backend and handle teach-mode UX.
   const sendPrompt = async (prompt: string) => {
     const teachModeDuringSend = teachMode;
     if (teachModeDuringSend) {
@@ -639,6 +674,7 @@ export default function ChatApp() {
     }
   };
 
+  // Interpret slash commands and call the matching backend route.
   const handleCommand = async (rawCommand: string) => {
     const stripped = rawCommand.slice(1).trim();
     console.log("Command executed:", rawCommand);
@@ -933,6 +969,7 @@ export default function ChatApp() {
     appendSystem(`Unknown command “/${normalized}”. Try /help.`);
   };
 
+  // When clicking a suggestion, seed the textarea with its syntax.
   const applyCommandTemplate = (command: CommandDefinition) => {
     const template = command.usage.endsWith(" ") ? command.usage : `${command.usage} `;
     setInput(template);
@@ -940,6 +977,7 @@ export default function ChatApp() {
     setShowSuggestions(false);
   };
 
+  // Show a simple loader until the auth hook resolves current status.
   if (authChecking) {
     return (
       <div className="app-loading-shell">
@@ -955,10 +993,12 @@ export default function ChatApp() {
     );
   }
 
+  // Route the standalone terms page outside the chat shell.
   if (pathNormalized === "/terms") {
     return <TermsPage />;
   }
 
+  // Render login or signup shells for unauthenticated visitors.
   if (!isAuthenticated) {
     if (pathNormalized === "/signup") {
       return (
@@ -974,6 +1014,7 @@ export default function ChatApp() {
     );
   }
 
+  // Default authenticated view: chat shell with sidebar + composer.
   return (
     <div className="chat-app">
       <div className="chat-shell">

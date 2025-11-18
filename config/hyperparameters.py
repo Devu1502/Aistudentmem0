@@ -1,9 +1,11 @@
+# Tunable knobs that influence how much context gets fed to the LLM.
 from __future__ import annotations
 
 from dataclasses import dataclass
 import os
 
 
+# Keep context heuristics in one frozen dataclass for easy reuse.
 @dataclass(frozen=True)
 class ContextHyperParameters:
     document_limit: int = int(os.getenv("DOC_LIMIT", 5))
@@ -14,4 +16,5 @@ class ContextHyperParameters:
     summary_token_threshold: int = int(os.getenv("SUMMARY_TOKEN_THRESHOLD", 2000))
 
 
+# Instantiate once so modules can pull shared limits.
 hyperparams = ContextHyperParameters()

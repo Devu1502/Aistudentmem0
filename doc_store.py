@@ -27,6 +27,7 @@ from memory import OpenAIEmbedder
 
 from config.settings import settings
 
+# Log ingestion activity and vector store errors for debugging.
 logger = logging.getLogger(__name__)
 
 
@@ -134,6 +135,7 @@ class DocumentStore:
                 return
             raise
 
+    # Convert raw text chunks into Qdrant points with metadata.
     def _encode_chunks(
         self,
         doc_id: str,
@@ -163,6 +165,7 @@ class DocumentStore:
             )
         return points
 
+    # Turn simple equality filters into Qdrant filter objects.
     def _build_filter(self, filters: Optional[Dict[str, Any]]) -> Optional[Filter]:
         if not filters:
             return None
@@ -179,11 +182,13 @@ class DocumentStore:
         return Filter(must=conditions) if conditions else None
 
     @staticmethod
+    # Recognize permission errors that should not crash ingestion.
     def _is_forbidden_error(exc: Exception) -> bool:
         message = str(exc).lower()
         return "forbidden" in message or "403" in message
 
     @staticmethod
+    # Without payload indexes we have to filter results manually.
     def _needs_manual_filter(exc: Exception) -> bool:
         message = str(exc).lower()
         return "index required" in message or "payload index" in message
@@ -253,6 +258,7 @@ class DocumentStore:
         ]
         return {"results": formatted}
 
+    # Preferred query path that lets Qdrant handle filters.
     def _run_similarity_search(
         self,
         *,
@@ -304,6 +310,7 @@ class DocumentStore:
                 )
             raise
 
+    # Fallback search path that filters candidate points locally.
     def _manual_filter_search(
         self,
         *,
@@ -334,6 +341,7 @@ class DocumentStore:
         return matches
 
     @staticmethod
+    # Basic equality check used by the manual filtering fallback.
     def _payload_matches(payload: Dict[str, Any], filters: Dict[str, Any]) -> bool:
         if not filters:
             return True

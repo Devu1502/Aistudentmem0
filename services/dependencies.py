@@ -1,3 +1,4 @@
+# Provide cached dependency factories for the FastAPI app.
 from functools import lru_cache
 
 from qdrant_client import QdrantClient
@@ -9,6 +10,7 @@ from services.chat_service import ChatService
 from services.document_service import DocumentIngestionService
 
 
+# Reuse a single Qdrant client to avoid reconnect cost.
 @lru_cache
 def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
@@ -19,11 +21,13 @@ def get_qdrant_client() -> QdrantClient:
     )
 
 
+# Share one embedder instance configured with the preferred model.
 @lru_cache
 def get_embedder() -> OpenAIEmbedder:
     return OpenAIEmbedder(model=settings.models.embed)
 
 
+# Wrap the chat memory store with cached configuration.
 @lru_cache
 def get_memory_store() -> LocalMemory:
     return LocalMemory(
@@ -34,6 +38,7 @@ def get_memory_store() -> LocalMemory:
     )
 
 
+# Provide a cached document store for ingestion and retrieval.
 @lru_cache
 def get_document_store() -> DocumentStore:
     return DocumentStore(
@@ -44,11 +49,13 @@ def get_document_store() -> DocumentStore:
     )
 
 
+# Wire up the chat service once so routes can pull it in quickly.
 @lru_cache
 def get_chat_service() -> ChatService:
     return ChatService(memory_store=get_memory_store(), document_store=get_document_store())
 
 
+# Same idea for the document ingestion service.
 @lru_cache
 def get_document_service() -> DocumentIngestionService:
     return DocumentIngestionService(document_store=get_document_store())

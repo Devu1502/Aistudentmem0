@@ -1,3 +1,4 @@
+# Quick utility to convert PDFs into plaintext snippets.
 from __future__ import annotations
 
 import sys
@@ -31,6 +32,7 @@ def extract_pdf(filepath: str):
 
 
 if __name__ == "__main__":
+    # Allow running `python markitdown_auto_detect.py file.pdf`.
     if len(sys.argv) < 2:
         print("Usage: python markitdown_auto_detect.py <pdf1> [<pdf2> ...]")
         sys.exit(1)

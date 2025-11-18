@@ -1,3 +1,4 @@
+# Maintenance endpoints for interacting with the LocalMemory store.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,6 +12,7 @@ router = APIRouter()
 
 
 @router.post("/add")
+# Convenience endpoint to manually add a memory snippet.
 def add_memory(
     text: str = Query(..., description="Content to store"),
     topic: str = "general",
@@ -34,6 +36,7 @@ def add_memory(
 
 
 @router.get("/search")
+# Query the vector store with optional topic/session filters.
 def search_memory(
     query: str,
     topic: str | None = None,
@@ -58,6 +61,7 @@ def search_memory(
 
 
 @router.get("/all")
+# Dump the raw memories for inspection in the UI.
 def get_all(
     topic: str | None = None,
     session_id: str | None = None,
@@ -73,6 +77,7 @@ def get_all(
 
 
 @router.post("/update")
+# Overwrite an existing memory entry.
 def update_memory(
     memory_id: str,
     new_text: str,
@@ -84,6 +89,7 @@ def update_memory(
 
 
 @router.delete("/delete")
+# Remove either a specific memory or all of a user's entries.
 def delete_memory(
     memory_id: str | None = None,
     memory_store: LocalMemory = Depends(get_memory_store),
@@ -97,12 +103,14 @@ def delete_memory(
 
 
 @router.post("/reset")
+# Drop and recreate the entire collection for troubleshooting.
 def reset_all(memory_store: LocalMemory = Depends(get_memory_store), current_user: dict = Depends(protect)):
     memory_store.reset()
     return {"message": "All memories reset"}
 
 
 @router.get("/search_topic")
+# Helper route that returns the top N hits for a keyword.
 def search_topic(
     query: str = Query(..., description="Keyword to search"),
     limit: int = 5,
@@ -127,6 +135,7 @@ def search_topic(
 
 
 @router.get("/search_history")
+# Lightweight alias that reuses the primary search route.
 def search_all(
     query: str = Query(...),
     memory_store: LocalMemory = Depends(get_memory_store),
@@ -137,6 +146,7 @@ def search_all(
 
 
 @router.get("/inspect_memory")
+# Diagnostic view that prints short/long term memories to stdout.
 def inspect_memory(memory_store: LocalMemory = Depends(get_memory_store), current_user: dict = Depends(protect)):
     short = memory_store.search(query="", user_id=current_user["id"], filters={"type": "short_term"})
     long = memory_store.search(query="", user_id=current_user["id"], filters={"type": "long_term"})
