@@ -116,8 +116,7 @@ class ChatService:
         # Store a short-turn summary inside the memory store.
         conversation_summary = f"Teacher: {prompt}\nStudent: {reply_text}"
         self.memory_store.add(
-            conversation_summary,
-            user_id=user_id,
+q            user_id=user_id,
             agent_id="general",
             run_id=active_session,
             metadata={"type": "short_term"},

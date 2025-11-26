@@ -40,7 +40,7 @@ class DocumentIngestionService:
                 store_result = self.document_store.add_document(
                     file.filename or "Untitled",
                     text_content,
-                    metadataa=metadata,
+                    metadata=metadata,
                 )
                 uploaded.append(
                     {
